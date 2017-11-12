@@ -1,0 +1,9 @@
+[package]
+name = "polyclip"
+version = "0.1.0"
+authors = ["Felix Schütt <felix.schuett@maps4print.com>"]
+
+[dependencies]
+
+[features]
+use_double_precision = []
