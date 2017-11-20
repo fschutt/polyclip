@@ -1,7 +1,9 @@
+use fsize;
+
 #[derive(Debug, Clone)]
 pub struct Point2D {
-  pub x: f32,
-  pub y: f32,
+  pub x: fsize,
+  pub y: fsize,
 }
 
 /// Check if lines intersect. This function is called very often,
