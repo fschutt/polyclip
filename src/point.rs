@@ -1,6 +1,6 @@
 use fsize;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Point2D {
   pub x: fsize,
   pub y: fsize,

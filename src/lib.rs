@@ -12,23 +12,17 @@
 #![allow(non_camel_case_types)]
 #![allow(unused_variables)]
 
-mod point;
-mod algorithm;
-mod polygon;
-
-pub use point::{Point2D, line_intersect};
-
 #[cfg(not(use_double_precision))]
 pub type fsize = f32;
 #[cfg(use_double_precision)]
 pub type fsize = f64;
 
-/// Bounding box
-#[derive(Debug, Clone)]
-pub struct Bbox {
-    pub(crate) top: fsize,
-    pub(crate) right: fsize,
-    pub(crate) bottom: fsize,
-    pub(crate) left: fsize,
-}
+mod point;
+mod algorithm;
+mod polygon;
+mod bbox;
+
+pub use point::{Point2D, line_intersect};
+pub use polygon::{Polygon};
+pub use bbox::{Bbox};
 
