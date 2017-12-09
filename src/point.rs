@@ -6,6 +6,8 @@ pub struct Point2D {
   pub y: fsize,
 }
 
+impl Eq for Point2D { }
+
 /// Check if lines intersect. This function is called very often,
 /// takes roughly 1.27 microseconds per checks
 pub fn line_intersect(p0: Point2D, p1: Point2D, p2: Point2D, p3: Point2D)

@@ -15,20 +15,20 @@ struct Edge<'a> {
     pub right_index: usize,
 }
 
-#[derive(PartialEq, Copy, Clone, Eq)]
+#[derive(Debug, PartialEq, Copy, Clone, Eq)]
 pub(crate) enum EventType {
     Left,
     Right,
 }
 
 /// Indicates if the edge belongs to the subject or clipping polygon
-#[derive(PartialEq, Copy, Clone, Eq)]
+#[derive(Debug, PartialEq, Copy, Clone, Eq)]
 pub(crate) enum PolygonType {
     Subject,
     Clipping,
 }
 
-#[derive(PartialEq, Copy, Clone, Eq)]
+#[derive(Debug, PartialEq, Copy, Clone, Eq)]
 pub(crate) enum EdgeType {
     Normal,
     NonContributing,
@@ -38,7 +38,7 @@ pub(crate) enum EdgeType {
 
 // NOTE: Rust does struct layout optimization. It is useless to use bitfields here,
 // Rust creates bitfields automatically. The size of the SweepEvent is 24 bytes total
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub(crate) struct SweepEvent<'a> {
     /// Point associated with the event
     pub p: &'a Point2D,
@@ -71,9 +71,9 @@ impl<'a> SweepEvent<'a> {
     #[inline]
     pub fn below(&self, other: &Point2D) -> bool {
         if self.left {
-            calculate_signed_area3(&self.p, &(*self.other).p, other) > 0.0
+            calculate_signed_area3(&self.p, unsafe { &(*self.other).p }, other) > 0.0
         } else {
-            calculate_signed_area3(&(*self.other).p, &self.p, other) > 0.0
+            calculate_signed_area3(unsafe { &(*self.other).p }, &self.p, other) > 0.0
         }
     }
 
@@ -110,7 +110,7 @@ impl<'a> SweepEvent<'a> {
 
         // Same point, both events are left endpoints or both are right endpoints.
         // The event associated to the bottom segment is processed first
-        return self.above(&(*other.other).p);
+        return self.above(unsafe { &(*other.other).p });
     }
 }
 
@@ -123,6 +123,12 @@ impl<'a> PartialOrd for SweepEvent<'a> {
         } else {
             Some(Ordering::Less)
         }
+    }
+}
+
+impl<'a> Ord for SweepEvent<'a> {
+    fn cmp(&self, other: &SweepEvent) -> Ordering {
+        self.partial_cmp(other).unwrap()
     }
 }
 

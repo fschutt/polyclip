@@ -39,6 +39,8 @@ impl Polygon {
     /// If the current polygon is empty, returns None.
     pub fn subtract(&self, other: &Self) -> Option<Self> {
 
+        use std::collections::BinaryHeap;
+
         // Trivial result case - either self or other polygon do not exist
         // or they are lines. At the very least we need a triangle.
         if self.nodes.is_empty() {
@@ -62,71 +64,84 @@ impl Polygon {
             return Some(self.clone());
         }
 
-        fn create_sweep_events<'a>(nodes: &'a [Point2D], pl: PolygonType) -> Vec<SweepEvent<'a>> {
-            let mut new_vec = Vec::with_capacity((nodes.len() * 2));
-
-            let iter1 = nodes.iter();
-            let mut iter2 = nodes.iter().cycle();
-            iter2.next();
-
-            for (idx, (cur_point, next_point)) in iter1.zip(iter2).enumerate() {
-
-                let mut e1 = SweepEvent {
-                    p: cur_point,
-                    other: ::std::ptr::null(),
-                    left: true,
-                    pl: pl,
-                    in_out: false,    /* in C++, this is not initialized */
-                    is_inside: false, /* in C++, this is not initialized */
-                    edge_type: EdgeType::Normal,
-                };
-
-                let mut e2 = SweepEvent {
-                    p: next_point,
-                    other: ::std::ptr::null(),
-                    left: true,
-                    pl: pl,
-                    in_out: false,
-                    is_inside: false,
-                    edge_type: EdgeType::Normal,
-                };
-
-                if e1.p.x < e2.p.x {
-                    e2.left = false;
-                } else if e1.p.x > e2.p.x {
-                    e1.left = false;
-                } else if e1.p.y < e2.p.y {
-                    // The line segment is vertical.
-                    // The bottom endpoint is the left endpoint
-                    e2.left = false;
-                } else {
-                    e1.left = false;
-                }
-
-                // TODO: use get_unchecked
-                *new_vec.get_mut(idx * 2).unwrap() = e1;
-                *new_vec.get_mut((idx * 2) + 1).unwrap() = e2;
-            }
-
-            // create the references after the vector has been completely constructed
-            for i in 0..nodes.len() {
-
-                let (e1, e2) =  new_vec.split_at_mut(i * 2);
-                e1[e1.len()].other = &e2[0]  as *const SweepEvent;
-            }
-
-            new_vec
-        }
-
         let pl_sub = PolygonType::Subject;
         let vec_of_sweep_events_subject = create_sweep_events(&self.nodes, PolygonType::Subject);
         let vec_of_sweep_events_clipping = create_sweep_events(&other.nodes, PolygonType::Clipping);
+
+        // create the event queue
+        let mut event_queue = BinaryHeap::<SweepEvent>::with_capacity((self.nodes.len() * 2) + (other.nodes.len() * 2));
+        for event in &vec_of_sweep_events_subject._internal { event_queue.push(event.clone()); }
+        for event in &vec_of_sweep_events_clipping._internal { event_queue.push(event.clone()); }
+
+        // calculate the necessesary events
+        while let Some(event) = event_queue.pop() {
+            println!("process event: {:?}", event);
+        }
 
         None
     }
 }
 
-pub fn calculate_winding(nodes: &[Point2D]) -> WindingOrder {
+struct ImmutableSweepEvents<'a> { _internal: Vec<SweepEvent<'a>> }
+
+// DO NOT modify the return type, otherwise you will invalidate all internal pointers!
+fn create_sweep_events(nodes: &[Point2D], pl: PolygonType) -> ImmutableSweepEvents {
+    let mut new_vec = Vec::with_capacity((nodes.len() * 2));
+
+    let iter1 = nodes.iter();
+    let mut iter2 = nodes.iter().cycle();
+    iter2.next();
+
+    for (idx, (cur_point, next_point)) in iter1.zip(iter2).enumerate() {
+
+        let mut e1 = SweepEvent {
+            p: cur_point,
+            other: ::std::ptr::null(),
+            left: true,
+            pl: pl,
+            in_out: false,    /* in C++, this is not initialized */
+            is_inside: false, /* in C++, this is not initialized */
+            edge_type: EdgeType::Normal,
+        };
+
+        let mut e2 = SweepEvent {
+            p: next_point,
+            other: ::std::ptr::null(),
+            left: true,
+            pl: pl,
+            in_out: false,
+            is_inside: false,
+            edge_type: EdgeType::Normal,
+        };
+
+        if e1.p.x < e2.p.x {
+            e2.left = false;
+        } else if e1.p.x > e2.p.x {
+            e1.left = false;
+        } else if e1.p.y < e2.p.y {
+            // The line segment is vertical.
+            // The bottom endpoint is the left endpoint
+            e2.left = false;
+        } else {
+            e1.left = false;
+        }
+
+        // TODO: use get_unchecked
+        *new_vec.get_mut((idx * 2) + 1).unwrap() = e2;
+        *new_vec.get_mut(idx * 2).unwrap() = e1;
+    }
+
+    // create the references, now that the
+    // vector has been completely constructed
+    for i in 0..nodes.len() {
+        let (e1, e2) =  new_vec.split_at_mut(i * 2);
+        e1[e1.len()].other = &e2[0];
+    }
+
+    ImmutableSweepEvents { _internal: new_vec }
+}
+
+fn calculate_winding(nodes: &[Point2D]) -> WindingOrder {
     // cannot happen, since the parent function should
     // take care of early returning on invalid polygons
     assert!(nodes.len() > 2);
@@ -144,7 +159,7 @@ pub fn calculate_winding(nodes: &[Point2D]) -> WindingOrder {
 }
 
 /// Calculates the bounding box of all points in the nodes
-pub fn calculate_bounding_box(nodes: &[Point2D]) -> Bbox {
+fn calculate_bounding_box(nodes: &[Point2D]) -> Bbox {
 
     #[cfg(not(use_double_precision))]
     let mut min_x = ::std::f32::MAX;
