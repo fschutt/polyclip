@@ -2,6 +2,7 @@ use Point2D;
 use Bbox;
 use fsize;
 use algorithm::{SweepEvent, PolygonType, EdgeType};
+use point_chain::PointChain;
 
 /// Modifying the nodes of a polygon must be done via a closure,
 /// because if the points are modified, the bounding box has to be recomputed
@@ -10,16 +11,34 @@ pub struct Polygon {
     pub nodes: Vec<Point2D>,
     /// Is this polygon a hole?
     pub is_hole: bool,
+    /// Is this polygon closed?
+    pub is_closed: bool,
     /// Are the nodes of this polygon in a clockwise order?
     /// By default, this field is not calculated, due to performance reasons
     /// If you want to calculate it, call `calculate_winding(&self.nodes)`
+    ///
+    /// If you already know the winding order, please set it beforehand, to speed up
+    /// the calculation.
     pub winding: Option<WindingOrder>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Winding order
+#[derive(Debug, Copy,Clone, PartialEq, Eq)]
 pub enum WindingOrder {
     Clockwise,
     CounterClockwise,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+enum BoolOpType {
+    Intersection,
+    Union,
+    Difference,
+    Xor,
+}
+
+struct ImmutableSweepEvents<'a> {
+    _internal: Vec<SweepEvent<'a>>,
 }
 
 impl Default for Polygon {
@@ -27,6 +46,7 @@ impl Default for Polygon {
         Self {
             nodes: Vec::new(),
             is_hole: false,
+            is_closed: true,
             winding: None,
         }
     }
@@ -34,19 +54,53 @@ impl Default for Polygon {
 
 impl Polygon {
 
+    pub fn subtract(&self, other: &Self)
+    -> Option<Vec<Self>>
+    {
+        self.calculate(other, BoolOpType::Intersection)
+    }
+
+    pub fn union(&self, other: &Self)
+    -> Option<Vec<Self>>
+    {
+        self.calculate(other, BoolOpType::Union)
+    }
+
+    pub fn difference(&self, other: &Self)
+    -> Option<Vec<Self>>
+    {
+        self.calculate(other, BoolOpType::Difference)
+    }
+
+    pub fn xor(&self, other: &Self)
+    -> Option<Vec<Self>>
+    {
+        self.calculate(other, BoolOpType::Xor)
+    }
+
     /// Substracts a polygon from the current one
     ///
     /// If the current polygon is empty, returns None.
-    pub fn subtract(&self, other: &Self) -> Option<Self> {
-
-        use std::collections::BinaryHeap;
+    #[inline(always)]
+    fn calculate(&self, other: &Self, operation_type: BoolOpType)
+    -> Option<Vec<Self>>
+    {
+        use std::collections::{BTreeSet, BinaryHeap};
+        use self::BoolOpType::*;
+        use connector::Connector;
 
         // Trivial result case - either self or other polygon do not exist
         // or they are lines. At the very least we need a triangle.
-        if self.nodes.is_empty() {
-            return Some(other.clone());
-        } else if other.nodes.is_empty() {
-            return Some(self.clone());
+        if (self.nodes.len() * other.nodes.len()) == 0 {
+            match operation_type {
+                Difference => return Some(vec![self.clone()]),
+                Intersection => return None,
+                Union | Xor  => if self.nodes.is_empty() {
+                    return Some(vec![other.clone()])
+                } else {
+                    return Some(vec![self.clone()])
+                },
+            }
         }
 
         // Trivial result case - one of the polygons is actually a line
@@ -56,40 +110,75 @@ impl Polygon {
         }
 
         // Trivial result case - boundaries don't overlap
+        // NOTE: This should not be done here, this should be done in the MultiPolygon
+        // class (R* tree)
         let self_bbox = calculate_bounding_box(&self.nodes);
         let other_bbox = calculate_bounding_box(&other.nodes);
 
         if !self_bbox.overlaps(&other_bbox) {
-            // no overlap = return Self
-            return Some(self.clone());
+            match operation_type {
+                Difference => return Some(vec![self.clone()]),
+                Intersection => return None,
+                Union | Xor => return Some(vec![self.clone(), other.clone()])
+            }
         }
 
-        let pl_sub = PolygonType::Subject;
-        let vec_of_sweep_events_subject = create_sweep_events(&self.nodes, PolygonType::Subject);
+        // Boolean operation is non-trivial
 
+        // Create the sweep events
+        let vec_of_sweep_events_subject = create_sweep_events(&self.nodes, PolygonType::Subject);
         let vec_of_sweep_events_clipping = create_sweep_events(&other.nodes, PolygonType::Clipping);
 
-        // create the event queue
+        // Sort the sweep events
+        // Insert all the endpoints associated to the line segments into the event queue
         let mut event_queue = BinaryHeap::<SweepEvent>::with_capacity((self.nodes.len() * 2) + (other.nodes.len() * 2));
         for event in &vec_of_sweep_events_subject._internal { event_queue.push(event.clone()); }
         for event in &vec_of_sweep_events_clipping._internal { event_queue.push(event.clone()); }
 
-        // calculate the necessesary events
+        // -------------------------------------------------------------------- sweep events created
+
+        let connector = Connector::new();
+
+        let mut sweep_line = BTreeSet::<SweepEvent>::new();
+
+        let minimum_x_bbox_pt = self_bbox.right.min(other_bbox.right);
+
+        // calculate the necessary events
         while let Some(event) = event_queue.pop() {
-            println!("process event: {:?}", event);
+            match operation_type {
+                Intersection => {
+                    if event.p.x > minimum_x_bbox_pt {
+                        return Some(connector.to_polygons());
+                    }
+                },
+                Difference => {
+                    if event.p.x > self_bbox.right {
+                        break;
+                    }
+                },
+                Union => {
+                    if event.p.x > minimum_x_bbox_pt {
+                        if !event.left {
+                            // add all the non-processed line segments to the result
+                            // connector.add (e->segment ());
+                        }
+                        continue;
+                    }
+                },
+                Xor => { },
+            }
         }
 
-        None
+        return Some(connector.to_polygons());
     }
 }
 
-#[derive(Debug)]
-struct ImmutableSweepEvents<'a> {
-    _internal: Vec<SweepEvent<'a>>,
-}
-
 // DO NOT modify the return type, otherwise you will invalidate all internal pointers!
-#[inline(always)]
+//
+// NOTE: it may be better to use indices instead of pointer.
+// However, in the end, the effect would be almost the same, since index checking is disabled.
+// So it's up to testing what version (pointers or indices) is more efficient.
+#[inline]
 fn create_sweep_events(nodes: &[Point2D], pl: PolygonType) -> ImmutableSweepEvents {
 
     let vec_len = nodes.len() * 2;

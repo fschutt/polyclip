@@ -10,7 +10,7 @@ impl Eq for Point2D { }
 
 /// Check if lines intersect. This function is called very often,
 /// takes roughly 1.27 microseconds per checks
-pub fn line_intersect(p0: &Point2D, p1: &Point2D, p2: &Point2D, p3: &Point2D)
+pub(crate) fn line_intersect(p0: &Point2D, p1: &Point2D, p2: &Point2D, p3: &Point2D)
                       -> Option<Point2D>
 {
     let s1_x = p1.x - p0.x;
@@ -35,7 +35,7 @@ pub fn line_intersect(p0: &Point2D, p1: &Point2D, p2: &Point2D, p3: &Point2D)
 }
 
 #[test]
-pub fn test_line_intersect_none() {
+pub(crate) fn test_line_intersect_none() {
     // No Intersect
     let result1 = line_intersect(Point2D { x: 0.0,  y: 0.0 },
                                  Point2D { x: 2.0,  y: 8.0 },
@@ -45,7 +45,7 @@ pub fn test_line_intersect_none() {
 }
 
 #[test]
-pub fn test_line_intersect_intersect() {
+pub(crate) fn test_line_intersect_intersect() {
     // Intersect
     let result1 = line_intersect(Point2D { x: 0.0,  y: 10.0},
                                  Point2D { x: 2.0,  y: 0.0 },
@@ -55,7 +55,7 @@ pub fn test_line_intersect_intersect() {
 }
 
 #[test]
-pub fn test_line_intersect_parallel_vertical() {
+pub(crate) fn test_line_intersect_parallel_vertical() {
     // Parallel, vertical
     let result = line_intersect(Point2D { x: 0.0,  y: 0.0},
                                 Point2D { x: 0.0,  y: 10.0 },
@@ -65,7 +65,7 @@ pub fn test_line_intersect_parallel_vertical() {
 }
 
 #[test]
-pub fn test_line_intersect_parallel_diagonal() {
+pub(crate) fn test_line_intersect_parallel_diagonal() {
     // Parallel, diagonal
     let result = line_intersect(Point2D { x: 0.0,  y: 0.0},
                                 Point2D { x: 5.0,  y: 5.0 },
@@ -75,7 +75,7 @@ pub fn test_line_intersect_parallel_diagonal() {
 }
 
 #[test]
-pub fn test_line_intersect_colinear_overlap() {
+pub(crate) fn test_line_intersect_colinear_overlap() {
     // Collinear, overlap
     let result = line_intersect(Point2D { x: 0.0,  y: 0.0 },
                                 Point2D { x: 5.0,  y: 5.0 },
@@ -85,7 +85,7 @@ pub fn test_line_intersect_colinear_overlap() {
 }
 
 #[test]
-pub fn test_line_intersect_colinear_nooverlap() {
+pub(crate) fn test_line_intersect_colinear_nooverlap() {
     // Collinear, no overlap
     let result = line_intersect(Point2D { x: 0.0,  y: 0.0 },
                                 Point2D { x: 5.0,  y: 5.0 },

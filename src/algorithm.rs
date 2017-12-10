@@ -1,19 +1,8 @@
 //! Core Martinez-Rueda-Feito algorithm
 
-use Polygon;
 use Point2D;
 use fsize;
 use ::std::cmp::Ordering;
-
-/// Edge structure between exactly two points
-struct Edge<'a> {
-    /// The polygon this edge references
-    pub polygon: &'a Polygon,
-    /// Index of the point at which the point begins
-    pub left_index: usize,
-    /// Index of the point that ends the edge
-    pub right_index: usize,
-}
 
 #[derive(Debug, PartialEq, Copy, Clone, Eq)]
 pub(crate) enum EventType {
@@ -200,48 +189,3 @@ fn is_point_in_triangle(s: &[Point2D; 2], o: &Point2D, p: &Point2D) -> bool {
     (sign_first == calculate_sign(&s[1], o, p)) &&
     (sign_first == calculate_sign(o, &s[0], p))
 }
-
-
-/// Core function to calculate the intersection
-fn calculate_intersect() {
-    /*
-    Insert the endpoints of the edges of polygons into priority queue Q
-
-    while !Q.is_empty() {
-        let event = Q.top();
-        Q.pop();
-
-        if (event.left_endpoint()) {
-            // left endpoint
-            let pos = S.insert(event);
-            event.set_inside_other_polygon_flag(S.prev(pos));
-            possible_inter(pos, S.next(pos));
-            possible_inter(pos, S.prev(pos));
-        } else {
-            // right endpoint
-            let pos = S.find(*event.other);
-            let next = S.next(pos);
-            let pref = S.prev(pos);
-            if event.inside_other_polygon() {
-                intersection.add(event.segment());
-            } else {
-                Union.add(event.segment());
-            }
-            S.erase(pos);
-            possible_inter(prev, next);
-        }
-    }
-    */
-}
-
-/// Subdivide the edges of the polygons at their intersection points.
-fn subdivide_edges() {
-
-}
-
-/// Select those subdivided edges that lie inside the other
-/// polygon—or that do not lie depending on the operation.
-fn select_edges() { }
-
-/// Join the edges selected in step 2 to form the result polygon.
-fn join_edges() { }
