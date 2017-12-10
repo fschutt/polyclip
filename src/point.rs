@@ -10,7 +10,7 @@ impl Eq for Point2D { }
 
 /// Check if lines intersect. This function is called very often,
 /// takes roughly 1.27 microseconds per checks
-pub fn line_intersect(p0: Point2D, p1: Point2D, p2: Point2D, p3: Point2D)
+pub fn line_intersect(p0: &Point2D, p1: &Point2D, p2: &Point2D, p3: &Point2D)
                       -> Option<Point2D>
 {
     let s1_x = p1.x - p0.x;
@@ -19,7 +19,7 @@ pub fn line_intersect(p0: Point2D, p1: Point2D, p2: Point2D, p3: Point2D)
     let s2_y = p3.y - p2.y;
 
     let coef_div = -s2_x * s1_y + s1_x * s2_y;
-    if coef_div == 0.0 { return None; /* lines merged to single point, avoid division by 0 */ }
+    if coef_div == 0.0 { return Some(*p0); /* lines merged to single point, avoid division by 0 */ }
 
     let s = (-s1_y * (p0.x - p2.x) + s1_x * (p0.y - p2.x)) / coef_div;
     let t = ( s2_x * (p0.y - p2.y) - s2_y * (p0.x - p2.y)) / coef_div;

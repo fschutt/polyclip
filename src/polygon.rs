@@ -66,6 +66,7 @@ impl Polygon {
 
         let pl_sub = PolygonType::Subject;
         let vec_of_sweep_events_subject = create_sweep_events(&self.nodes, PolygonType::Subject);
+
         let vec_of_sweep_events_clipping = create_sweep_events(&other.nodes, PolygonType::Clipping);
 
         // create the event queue
@@ -82,61 +83,84 @@ impl Polygon {
     }
 }
 
-struct ImmutableSweepEvents<'a> { _internal: Vec<SweepEvent<'a>> }
+#[derive(Debug)]
+struct ImmutableSweepEvents<'a> {
+    _internal: Vec<SweepEvent<'a>>,
+}
 
 // DO NOT modify the return type, otherwise you will invalidate all internal pointers!
+#[inline(always)]
 fn create_sweep_events(nodes: &[Point2D], pl: PolygonType) -> ImmutableSweepEvents {
-    let mut new_vec = Vec::with_capacity((nodes.len() * 2));
+
+    let vec_len = nodes.len() * 2;
+    let mut new_vec = Vec::<SweepEvent>::with_capacity(vec_len);
+    unsafe { new_vec.set_len(vec_len); }
 
     let iter1 = nodes.iter();
     let mut iter2 = nodes.iter().cycle();
     iter2.next();
 
-    for (idx, (cur_point, next_point)) in iter1.zip(iter2).enumerate() {
+    let mut cur_pt_idx = 1;
+    for (cur_point, next_point) in iter1.zip(iter2) {
 
-        let mut e1 = SweepEvent {
+        let mut e1_left = true;
+        let mut e2_left = true;
+
+        if cur_point.x < next_point.x {
+            e2_left = false;
+        } else if cur_point.x > next_point.x {
+            e1_left = false;
+        } else if cur_point.y < next_point.y {
+            // The line segment is vertical.
+            // The bottom endpoint is the left endpoint
+            e2_left = false;
+        } else {
+            e1_left = false;
+        }
+
+        let e1 = SweepEvent {
             p: cur_point,
             other: ::std::ptr::null(),
-            left: true,
-            pl: pl,
-            in_out: false,    /* in C++, this is not initialized */
-            is_inside: false, /* in C++, this is not initialized */
-            edge_type: EdgeType::Normal,
-        };
-
-        let mut e2 = SweepEvent {
-            p: next_point,
-            other: ::std::ptr::null(),
-            left: true,
+            left: e1_left,
             pl: pl,
             in_out: false,
             is_inside: false,
             edge_type: EdgeType::Normal,
         };
 
-        if e1.p.x < e2.p.x {
-            e2.left = false;
-        } else if e1.p.x > e2.p.x {
-            e1.left = false;
-        } else if e1.p.y < e2.p.y {
-            // The line segment is vertical.
-            // The bottom endpoint is the left endpoint
-            e2.left = false;
-        } else {
-            e1.left = false;
+        let mut e2 = SweepEvent {
+            p: next_point,
+            other: ::std::ptr::null(),
+            left: e2_left,
+            pl: pl,
+            in_out: false,
+            is_inside: false,
+            edge_type: EdgeType::Normal,
+        };
+
+        unsafe {
+            {
+                let e1_location = new_vec.get_unchecked_mut(cur_pt_idx - 1);
+                *e1_location = e1;
+                e2.other = e1_location;
+            }
+
+            #[allow(unused_assignments)]
+            let mut e2_location = ::std::ptr::null_mut();
+            {
+                e2_location = new_vec.get_unchecked_mut(cur_pt_idx);
+                *e2_location = e2;
+            }
+            new_vec.get_unchecked_mut(cur_pt_idx - 1).other = e2_location;
         }
 
-        // TODO: use get_unchecked
-        *new_vec.get_mut((idx * 2) + 1).unwrap() = e2;
-        *new_vec.get_mut(idx * 2).unwrap() = e1;
+        cur_pt_idx += 2;
     }
 
-    // create the references, now that the
-    // vector has been completely constructed
-    for i in 0..nodes.len() {
-        let (e1, e2) =  new_vec.split_at_mut(i * 2);
-        e1[e1.len()].other = &e2[0];
-    }
+    // assert that the vector does not have moved (in memory)
+    // if it did, the internal pointer would be garbage
+    assert_eq!(new_vec.len(), vec_len);
+    assert_eq!(new_vec.capacity(), vec_len);
 
     ImmutableSweepEvents { _internal: new_vec }
 }

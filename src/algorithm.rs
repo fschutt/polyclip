@@ -43,9 +43,6 @@ pub(crate) struct SweepEvent<'a> {
     /// Point associated with the event
     pub p: &'a Point2D,
     /// Event associated to the other endpoint of the edge
-    ///
-    /// If this is `None`, this event has not been initialized yet
-    /// (in the C++ code, this is a null pointer)
     pub other: *const SweepEvent<'a>,
     /// Polygon type
     pub pl: PolygonType,
@@ -236,32 +233,6 @@ fn calculate_intersect() {
     }
     */
 }
-
-/*
-    We must hold a set C - initially empty - of chains of
-    connected edges and a set R that holds the result
-    polygons.
-
-    Every edge e that belongs to the solution must
-    be processed as follows:
-
-    - If e cannot be connected at any of the ends of any chain
-    of C, then a new chain, formed by e, is added to C.
-
-    - If e can be connected to only one chain c of C, then e is
-    added to c. If the first and last edges in c are connected,
-    then c holds a result polygon and it is moved to R.
-
-    - If e can be connected to two chains c1 and c2 of C, then
-    the edges of c2 and e are added to c1, and c2 is removed
-    from C. If the first and last edges in c1 are connected
-    then c1 is moved to R.
-*/
-
-/*
-Martinez mr (subj, clip);
-mr.compute (op, martinezResult);
-*/
 
 /// Subdivide the edges of the polygons at their intersection points.
 fn subdivide_edges() {
