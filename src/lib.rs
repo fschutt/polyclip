@@ -9,8 +9,8 @@
 //!   however the nodes don't have to be a valid polygon
 
 
-#![allow(dead_code)]
-#![allow(unused_variables)]
+// #![allow(dead_code)]
+// #![allow(unused_variables)]
 #![allow(non_camel_case_types)]
 
 #[cfg(not(use_double_precision))]

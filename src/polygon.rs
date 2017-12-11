@@ -391,3 +391,116 @@ fn divide_segment<'a>(event_vec: &'a mut Vec<SweepEvent<'a>>,
     eq.push(left.clone());
     eq.push(right.clone());
 }
+
+macro_rules! other {
+    ($e:expr) => (unsafe { (*$e.other_vec).get_unchecked($e.other_idx)})
+}
+
+fn possible_intersection(e1: &SweepEvent, e2: &SweepEvent) {
+
+    let result = ::point::line_intersect(&e1.p, &other!(e1).p, &e2.p, &other!(e2).p);
+    let (a, b) = match result {
+        Some(a) => (a.0, a.1),
+        None => return,
+    };
+
+
+    /*
+    Point ip1, ip2;  // intersection points
+    int nintersections;
+
+    if (!(nintersections = findIntersection(e1->segment (), e2->segment (), ip1, ip2)))
+        return;
+
+    if ((nintersections == 1) && ((e1->p == e2->p) || (e1->other->p == e2->other->p)))
+        return; // the line segments intersect at an endpoint of both line segments
+
+    if (nintersections == 2 && e1->pl == e2->pl) {  // the line segments overlap, but they belong to the same polygon
+        std::cerr << "A polygon has overlapping edges. Sorry, but the program does not work yet with this kind of polygon\n";
+        exit (1);
+    }
+
+    // The line segments associated to e1 and e2 intersect
+    nint += nintersections;
+
+    if (nintersections == 1) {
+        if (e1->p != ip1 && e1->other->p != ip1)  // if ip1 is not an endpoint of the line segment associated to e1 then divide "e1"
+            divideSegment (e1, ip1);
+        if (e2->p != ip1 && e2->other->p != ip1)  // if ip1 is not an endpoint of the line segment associated to e2 then divide "e2"
+            divideSegment (e2, ip1);
+        return;
+    }
+
+    // The line segments overlap
+    vector<SweepEvent *> sortedEvents;
+    if (e1->p == e2->p) {
+        sortedEvents.push_back (0);
+    } else if (sec (e1, e2)) {
+        sortedEvents.push_back (e2);
+        sortedEvents.push_back (e1);
+    } else {
+        sortedEvents.push_back (e1);
+        sortedEvents.push_back (e2);
+    }
+    if (e1->other->p == e2->other->p) {
+        sortedEvents.push_back (0);
+    } else if (sec (e1->other, e2->other)) {
+        sortedEvents.push_back (e2->other);
+        sortedEvents.push_back (e1->other);
+    } else {
+        sortedEvents.push_back (e1->other);
+        sortedEvents.push_back (e2->other);
+    }
+
+    if (sortedEvents.size () == 2) { // are both line segments equal?
+        e1->type = e1->other->type = NON_CONTRIBUTING;
+        e2->type = e2->other->type = (e1->inOut == e2->inOut) ? SAME_TRANSITION : DIFFERENT_TRANSITION;
+        return;
+    }
+    if (sortedEvents.size () == 3) { // the line segments share an endpoint
+        sortedEvents[1]->type = sortedEvents[1]->other->type = NON_CONTRIBUTING;
+        if (sortedEvents[0])         // is the right endpoint the shared point?
+            sortedEvents[0]->other->type = (e1->inOut == e2->inOut) ? SAME_TRANSITION : DIFFERENT_TRANSITION;
+         else                               // the shared point is the left endpoint
+            sortedEvents[2]->other->type = (e1->inOut == e2->inOut) ? SAME_TRANSITION : DIFFERENT_TRANSITION;
+        divideSegment (sortedEvents[0] ? sortedEvents[0] : sortedEvents[2]->other, sortedEvents[1]->p);
+        return;
+    }
+    if (sortedEvents[0] != sortedEvents[3]->other) { // no line segment includes totally the other one
+        sortedEvents[1]->type = NON_CONTRIBUTING;
+        sortedEvents[2]->type = (e1->inOut == e2->inOut) ? SAME_TRANSITION : DIFFERENT_TRANSITION;
+        divideSegment (sortedEvents[0], sortedEvents[1]->p);
+        divideSegment (sortedEvents[1], sortedEvents[2]->p);
+        return;
+    }
+     // one line segment includes the other one
+    sortedEvents[1]->type = sortedEvents[1]->other->type = NON_CONTRIBUTING;
+    divideSegment (sortedEvents[0], sortedEvents[1]->p);
+    sortedEvents[3]->other->type = (e1->inOut == e2->inOut) ? SAME_TRANSITION : DIFFERENT_TRANSITION;
+    divideSegment (sortedEvents[3]->other, sortedEvents[2]->p);
+    */
+}
+
+/*
+// Not sure what this does or if this is needed
+fn number_of_intersections(u0: fsize, u1: fsize, v0: fsize, v1: fsize, w: &mut [fsize; 2]) -> u8 {
+    if (u1 < v0) || (u0 > v1) {
+        return 0;
+    }
+    if u1 > v0 {
+        if u0 < v1 {
+            w[0] = if u0 < v0 { v0 } else { u0 };
+            w[1] = if u1 > v1 { v1 } else { u1 };
+            return 2;
+        } else {
+            // u0 == v1
+            w[0] = u0;
+            return 1;
+        }
+    } else {
+        // u1 == v0
+        w[0] = u1;
+        return 1;
+    }
+}
+*/
