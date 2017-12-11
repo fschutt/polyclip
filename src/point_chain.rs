@@ -10,6 +10,7 @@ pub(crate) struct PointChain<'a> {
 
 impl<'a> PointChain<'a> {
 
+    #[inline]
     pub(crate) fn init(initial_segment: Segment<'a>) -> Self {
 
         let mut deque = VecDeque::with_capacity(2);

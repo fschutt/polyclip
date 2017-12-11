@@ -18,15 +18,18 @@ pub type fsize = f32;
 #[cfg(use_double_precision)]
 pub type fsize = f64;
 
-mod point;
-mod algorithm;
-mod polygon;
 mod bbox;
-mod point_chain;
 mod connector;
+mod point;
+mod sweep_event;
+mod point_chain;
+mod polygon;
 mod segment;
+mod utils;
 
 pub use point::Point2D;
 pub use polygon::Polygon;
 pub use bbox::Bbox;
 
+// TODO: Replace all (*thing.other_vec)[thing.other_idx]
+// with (*thing.other_vec).get_unchecked(thing.other_idx)

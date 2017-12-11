@@ -7,6 +7,14 @@ pub(crate) struct Segment<'a> {
 }
 
 impl<'a> Segment<'a> {
+    #[inline]
+    pub(crate) fn new(begin_pt: &'a Point2D, end_pt: &'a Point2D) -> Self {
+        Self {
+            begin_pt: begin_pt,
+            end_pt: end_pt,
+        }
+    }
+
     pub(crate) fn change_orientation(&mut self) {
         ::std::mem::swap(&mut self.begin_pt, &mut self.end_pt);
     }

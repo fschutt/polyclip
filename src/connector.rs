@@ -61,6 +61,8 @@ impl<'a> Connector<'a> {
             if open.link_segment(segment.clone()) {
                 if open.is_closed() {
                     // self.closed_polygons.splice();
+                } else {
+
                 }
 
                 return;
