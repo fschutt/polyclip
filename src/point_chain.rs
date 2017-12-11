@@ -3,6 +3,7 @@ use segment::Segment;
 
 use std::collections::VecDeque;
 
+#[derive(Clone)]
 pub(crate) struct PointChain<'a> {
     nodes: VecDeque<&'a Point2D>,
     is_closed: bool,
@@ -23,6 +24,7 @@ impl<'a> PointChain<'a> {
         }
     }
 
+    /// Link a segment to the chain
     pub(crate) fn link_segment(&mut self, segment: Segment<'a>) -> bool {
 
         let nodes_last_idx = self.nodes.len() - 1;
@@ -68,42 +70,46 @@ impl<'a> PointChain<'a> {
         false
     }
 
+    /// Links another point chain to the current chain
     pub(crate) fn link_point_chain(&mut self, mut chain: PointChain<'a>) -> bool {
 
-        let chain_first_elem = chain.nodes[0];
-        let self_last_elem = *self.nodes.back().unwrap();
+        let chain_first_elem = *chain.nodes[0];
+        let self_last_elem = *self.nodes[self.nodes.len() - 1];
+
+        // NOTE: the C++ code uses a linked list + splice here,
+        // which is of course O(1) for the first two cases,
+        // instead of O(n) for a Vec. The last two cases are O(n) anyways
+        //
+        // however, since the PointChain gets iterated frequently,
+        // a linked list is not very cache-friendly, which is why I
+        // chose to use a Vec in the first place.
 
         if chain_first_elem == self_last_elem {
             chain.nodes.pop_front();
-            // self.nodes.splice();
+            chain.nodes.into_iter().for_each(|ch| self.nodes.push_back(ch));
             return true;
         }
 
-        /*
-            if (chain.l.front () == l.back ()) {
-                chain.l.pop_front ();
-                l.splice (l.end (), chain.l);
-                return true;
-            }
-            if (chain.l.back () == l.front ()) {
-                l.pop_front ();
-                l.splice (l.begin (), chain.l);
-                return true;
-            }
-            if (chain.l.front () == l.front ()) {
-                l.pop_front ();
-                reverse (chain.l.begin (), chain.l.end ());
-                l.splice (l.begin (), chain.l);
-                return true;
-            }
-            if (chain.l.back () == l.back ()) {
-                l.pop_back ();
-                reverse (chain.l.begin (), chain.l.end ());
-                l.splice (l.end (), chain.l);
-                return true;
-            }
-            return false;
-        */
+        let chain_last_elem = *chain.nodes[chain.nodes.len() - 1];
+        let self_first_elem = *self.nodes[0];
+
+        if chain_last_elem == self_first_elem {
+            self.nodes.pop_front();
+            chain.nodes.into_iter().for_each(|ch| self.nodes.push_front(ch));
+            return true;
+        }
+
+        if chain_first_elem == self_first_elem {
+            self.nodes.pop_front();
+            chain.nodes.into_iter().rev().for_each(|ch| self.nodes.push_front(ch));
+            return true;
+        }
+
+        if chain_last_elem == self_last_elem {
+            self.nodes.pop_back();
+            chain.nodes.into_iter().rev().for_each(|ch| self.nodes.push_back(ch));
+            return true;
+        }
 
         false
     }

@@ -1,7 +1,7 @@
 use {Point2D, Bbox, fsize};
 use sweep_event::{SweepEvent, PolygonType, EdgeType};
 use segment::Segment;
-use std::collections::{BTreeSet, VecDeque, BinaryHeap};
+use std::collections::{BTreeSet, BinaryHeap};
 
 /// Modifying the nodes of a polygon must be done via a closure,
 /// because if the points are modified, the bounding box has to be recomputed
@@ -370,11 +370,11 @@ fn divide_segment<'a>(event_vec: &'a mut Vec<SweepEvent<'a>>,
     let left  = event_holder.get(last).unwrap();
     let right = event_holder.get(last - 1).unwrap();
 
-    // original:
+    // original code:
+
     /*
-        // this probably will be invalidate when the VecDeque resizes !!!
-        event->other->other = left;
-        event->other = right;
+        event->other->other = left; // this probably will be invalidate when the event_holder resizes !!!
+        event->other = right;       // in the Rust version, it is replaced by an index
         eq.push(left);
         eq.push(right);
     */

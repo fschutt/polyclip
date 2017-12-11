@@ -57,46 +57,48 @@ impl<'a> Connector<'a> {
     }
 
     pub fn add_segment(&mut self, segment: Segment<'a>) {
-        for (idx, open) in self.open_polygons.iter_mut().enumerate() {
-            if open.link_segment(segment.clone()) {
-                if open.is_closed() {
-                    // self.closed_polygons.splice();
-                } else {
 
-                }
+        let mut interesting_segment: Option<usize> = None;
 
-                return;
+        for j in 0..self.open_polygons.len() {
+            if unsafe { self.open_polygons.get_unchecked_mut(j) }.link_segment(segment.clone()) {
+                interesting_segment = Some(j);
+                break;
             }
         }
 
-        /*
-            void Connector::add(const Segment& s)
-            {
-                iterator j = openPolygons.begin ();
-                while (j != openPolygons.end ()) {
-                    if (j->LinkSegment (s)) {
-                        if (j->closed ())
-                            closedPolygons.splice (closedPolygons.end(), openPolygons, j);
-                        else {
-                            list<PointChain>::iterator k = j;
-                            for (++k; k != openPolygons.end (); k++) {
-                                if (j->LinkPointChain (*k)) {
-                                    openPolygons.erase (k);
-                                    break;
-                                }
-                            }
+        if let Some(j) = interesting_segment {
+            if unsafe { self.open_polygons.get_unchecked(j) }.is_closed() {
+                self.closed_polygons.push(self.open_polygons.remove(j));
+            } else {
+                // this is more or less a manual version of .retain() because
+                // retain does not work on ranges
+                let mut delete_last_element = false;
+                {
+                    let (old_chains, to_append_chains) = self.open_polygons.split_at_mut(j);
+                    debug_assert!(old_chains.len() == j); // TODO
+
+                    let old_len = old_chains.len() - 1;
+                    let last_chain = unsafe { &mut old_chains.get_unchecked_mut(old_len) };
+
+                    // this code is inspired by the `Vec::retain()` source code
+                    let to_append_len = to_append_chains.len();
+                    for i in 0..to_append_len {
+                        if !(last_chain.link_point_chain((*unsafe { to_append_chains.get_unchecked(i) }).clone())) {
+                            delete_last_element = true;
+                            to_append_chains.swap(i, to_append_len - 1); // swap the current and last element
+                            break;
                         }
-                        return;
                     }
-                    j++;
                 }
-                // The segment cannot be connected with any open polygon
-                openPolygons.push_back (PointChain ());
-                openPolygons.back ().init (s);
+
+                if delete_last_element {
+                    self.open_polygons.pop(); // remove the last element
+                }
             }
-        */
-
-        self.open_polygons.push(PointChain::init(segment));
+        } else {
+            // The segment cannot be connected with any open polygon
+            self.open_polygons.push(PointChain::init(segment));
+        }
     }
-
 }
