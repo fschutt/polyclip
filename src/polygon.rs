@@ -398,12 +398,17 @@ macro_rules! other {
 
 fn possible_intersection(e1: &SweepEvent, e2: &SweepEvent) {
 
+    // For now, self-intersecting polygons are not allowed
+    if e1.polygon_type == e2.polygon_type {
+        return;
+    }
+/*
     let result = ::point::line_intersect(&e1.p, &other!(e1).p, &e2.p, &other!(e2).p);
     let (a, b) = match result {
         Some(a) => (a.0, a.1),
         None => return,
     };
-
+*/
 
     /*
     Point ip1, ip2;  // intersection points
