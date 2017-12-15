@@ -306,6 +306,144 @@ fn calculate_bounding_box(nodes: &[Point2D]) -> Bbox {
     }
 }
 
+macro_rules! other {
+    ($e:expr) => (unsafe { (*$e.other_vec).get_unchecked($e.other_idx)})
+}
+macro_rules! other_mut {
+    ($e:expr) => (unsafe { (*$e.other_vec).get_unchecked_mut($e.other_idx)})
+}
+
+fn possible_intersection(e1: &mut SweepEvent, e2: &mut SweepEvent) {
+
+    // Uncomment the following line if overlapping edges are not allowed
+    // if e1.polygon_type == e2.polygon_type { return; }
+
+    // note: this will COPY the point!
+    let e1_other_p = other!(e1).p;
+    let e2_other_p = other!(e2).p;
+
+    let result = ::point::line_intersect(&e1.p, &e1_other_p, &e2.p, &e2_other_p);
+
+    let (a, b) = match result {
+        Some(a) => (a.0, a.1),
+        None => return, // no intersections found
+    };
+
+    let new_b;
+
+    match b {
+        Some(new) => {
+            if e1.polygon_type == e2.polygon_type {
+                eprintln!("A polygon has overlapping edges. Sorry, but the program does not work yet with this kind of polygon");
+                return;
+            }
+            new_b = new;
+        },
+        None => {
+            if !((e1.p == e2.p) || (e1_other_p == e2_other_p)){
+                if *e1.p != a && *e1_other_p != a {
+                    // if a is not an endpoint of the line segment associated to e1 then divide "e1"
+                    // divide_segment(e1, a);
+                }
+
+                if *e2.p != a && *e2_other_p != a {
+                    // divide_segment(e2, a);
+                }
+            }
+
+            // else:
+            // the line segments intersect at an endpoint of both line segments
+            return;
+        },
+    }
+
+    // --- the code below is not correct!
+
+    // the line segments overlap
+    let mut sorted_events = Vec::<Option<&SweepEvent>>::with_capacity(4);
+
+    if e1.p == e2.p {
+        sorted_events.push(None)
+    } else if e1.compare(e2) {
+        sorted_events.push(Some(e2));
+        sorted_events.push(Some(e1));
+    } else {
+        sorted_events.push(Some(e1));
+        sorted_events.push(Some(e2));
+    }
+
+    if e1_other_p == e2_other_p {
+
+    } else if e1.compare(e2) {
+        sorted_events.push(Some(other!(e2)));
+        sorted_events.push(Some(other!(e1)));
+    } else {
+        sorted_events.push(Some(other!(e1)));
+        sorted_events.push(Some(other!(e2)));
+    }
+/*
+    if sorted_events.len() == 2 {
+        // are both line segments equal?
+        e1.edge_type = EdgeType::NonContributing;
+        other_mut!(e1).edge_type = EdgeType::NonContributing;
+        return;
+    }
+
+    if sorted_events.len() == 3 {
+        // the line segments share an endpoint
+        sorted_events[1].edge_type = EdgeType::NonContributing;
+        other_mut!(sorted_events[1]).edge_type = EdgeType::NonContributing;
+
+        if sorted_events[0].is_some() {
+            // is the right endpoint the shared point?
+            sorted_events[0].edge_type = if e1.in_out == e2.in_out {
+                EdgeType::SameTransition;
+            } else {
+                EdgeType::DifferentTransition;
+            };
+            divide_segment(sorted_events[0], sorted_events[1].p);
+        } else {
+            // the shared point is the left endpoint
+            sorted_events[2].edge_type = if e1.in_out == e2.in_out {
+                EdgeType::SameTransition;
+            } else {
+                EdgeType::DifferentTransition;
+            };
+            divide_segment(sorted_events[2], sorted_events[1].p);
+        }
+
+        return;
+    }
+
+    // sorted_events.len() == 4
+
+    if sorted_events[0] != other!(sorted_events[3]) {
+        // no line segment includes totally the other one
+        sorted_events[1].edge_type = EdgeType::NonContributing;
+        sorted_events[2].edge_type = if e1.in_out == e2.in_out {
+            EdgeType::SameTransition
+        } else {
+            EdgeType::DifferentTransition
+        };
+        divide_segment(sorted_events[0], sorted_events[1].p);
+        divide_segment(sorted_events[1], sorted_events[2].p);
+        return;
+    }
+
+    // one line segment includes the other one
+    sorted_events[1].edge_type = EdgeType::NonContributing;
+    other_mut!(sorted_events[1]).edge_type = EdgeType::NonContributing;
+    divide_segment(sorted_events[0], sorted_events[1].p);
+
+    other_mut!(sorted_events[3]).edge_type = if e1.in_out == e2.in_out {
+        EdgeType::SameTransition
+    } else {
+        EdgeType::DifferentTransition
+    };
+    divide_segment(other!(sorted_events[3]), sorted_events[2].p);
+*/
+}
+
 // event = event_vec[event_idx]
 //
 // __WARNING__: It is assumed that `event_vec` == `event.other_vec`, i.e. that
@@ -392,99 +530,6 @@ fn divide_segment<'a>(event_vec: &'a mut Vec<SweepEvent<'a>>,
     eq.push(right.clone());
 }
 
-macro_rules! other {
-    ($e:expr) => (unsafe { (*$e.other_vec).get_unchecked($e.other_idx)})
-}
-
-fn possible_intersection(e1: &SweepEvent, e2: &SweepEvent) {
-
-    // For now, self-intersecting polygons are not allowed
-    if e1.polygon_type == e2.polygon_type {
-        return;
-    }
-/*
-    let result = ::point::line_intersect(&e1.p, &other!(e1).p, &e2.p, &other!(e2).p);
-    let (a, b) = match result {
-        Some(a) => (a.0, a.1),
-        None => return,
-    };
-*/
-
-    /*
-    Point ip1, ip2;  // intersection points
-    int nintersections;
-
-    if (!(nintersections = findIntersection(e1->segment (), e2->segment (), ip1, ip2)))
-        return;
-
-    if ((nintersections == 1) && ((e1->p == e2->p) || (e1->other->p == e2->other->p)))
-        return; // the line segments intersect at an endpoint of both line segments
-
-    if (nintersections == 2 && e1->pl == e2->pl) {  // the line segments overlap, but they belong to the same polygon
-        std::cerr << "A polygon has overlapping edges. Sorry, but the program does not work yet with this kind of polygon\n";
-        exit (1);
-    }
-
-    // The line segments associated to e1 and e2 intersect
-    nint += nintersections;
-
-    if (nintersections == 1) {
-        if (e1->p != ip1 && e1->other->p != ip1)  // if ip1 is not an endpoint of the line segment associated to e1 then divide "e1"
-            divideSegment (e1, ip1);
-        if (e2->p != ip1 && e2->other->p != ip1)  // if ip1 is not an endpoint of the line segment associated to e2 then divide "e2"
-            divideSegment (e2, ip1);
-        return;
-    }
-
-    // The line segments overlap
-    vector<SweepEvent *> sortedEvents;
-    if (e1->p == e2->p) {
-        sortedEvents.push_back (0);
-    } else if (sec (e1, e2)) {
-        sortedEvents.push_back (e2);
-        sortedEvents.push_back (e1);
-    } else {
-        sortedEvents.push_back (e1);
-        sortedEvents.push_back (e2);
-    }
-    if (e1->other->p == e2->other->p) {
-        sortedEvents.push_back (0);
-    } else if (sec (e1->other, e2->other)) {
-        sortedEvents.push_back (e2->other);
-        sortedEvents.push_back (e1->other);
-    } else {
-        sortedEvents.push_back (e1->other);
-        sortedEvents.push_back (e2->other);
-    }
-
-    if (sortedEvents.size () == 2) { // are both line segments equal?
-        e1->type = e1->other->type = NON_CONTRIBUTING;
-        e2->type = e2->other->type = (e1->inOut == e2->inOut) ? SAME_TRANSITION : DIFFERENT_TRANSITION;
-        return;
-    }
-    if (sortedEvents.size () == 3) { // the line segments share an endpoint
-        sortedEvents[1]->type = sortedEvents[1]->other->type = NON_CONTRIBUTING;
-        if (sortedEvents[0])         // is the right endpoint the shared point?
-            sortedEvents[0]->other->type = (e1->inOut == e2->inOut) ? SAME_TRANSITION : DIFFERENT_TRANSITION;
-         else                               // the shared point is the left endpoint
-            sortedEvents[2]->other->type = (e1->inOut == e2->inOut) ? SAME_TRANSITION : DIFFERENT_TRANSITION;
-        divideSegment (sortedEvents[0] ? sortedEvents[0] : sortedEvents[2]->other, sortedEvents[1]->p);
-        return;
-    }
-    if (sortedEvents[0] != sortedEvents[3]->other) { // no line segment includes totally the other one
-        sortedEvents[1]->type = NON_CONTRIBUTING;
-        sortedEvents[2]->type = (e1->inOut == e2->inOut) ? SAME_TRANSITION : DIFFERENT_TRANSITION;
-        divideSegment (sortedEvents[0], sortedEvents[1]->p);
-        divideSegment (sortedEvents[1], sortedEvents[2]->p);
-        return;
-    }
-     // one line segment includes the other one
-    sortedEvents[1]->type = sortedEvents[1]->other->type = NON_CONTRIBUTING;
-    divideSegment (sortedEvents[0], sortedEvents[1]->p);
-    sortedEvents[3]->other->type = (e1->inOut == e2->inOut) ? SAME_TRANSITION : DIFFERENT_TRANSITION;
-    divideSegment (sortedEvents[3]->other, sortedEvents[2]->p);
-    */
-}
 
 /*
 // Not sure what this does or if this is needed
