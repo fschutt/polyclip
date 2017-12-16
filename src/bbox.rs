@@ -11,7 +11,7 @@ pub struct Bbox {
 
 impl Bbox {
 
-    // Returns true if two bounding boxes overlap
+    /// Returns true if two bounding boxes overlap
     #[inline]
     pub fn overlaps(&self, other: &Self) -> bool {
         !((other.left > self.right) ||

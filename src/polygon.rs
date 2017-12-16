@@ -7,6 +7,7 @@ use std::collections::{BTreeSet, BinaryHeap};
 /// because if the points are modified, the bounding box has to be recomputed
 #[derive(Debug, Clone)]
 pub struct Polygon {
+    /// The points that this polygon is made of
     pub nodes: Vec<Point2D>,
     /// Is this polygon a hole?
     pub is_hole: bool,
@@ -14,20 +15,22 @@ pub struct Polygon {
     pub is_closed: bool,
     /// Are the nodes of this polygon in a clockwise order?
     /// By default, this field is not calculated, due to performance reasons
-    /// If you want to calculate it, call `calculate_winding(&self.nodes)`
+    /// If you want to calculate it, call `calculate_winding_order(&self.nodes)`
     ///
     /// If you already know the winding order, please set it beforehand, to speed up
     /// the calculation.
     pub winding: Option<WindingOrder>,
 }
 
-/// Winding order
+/// Winding order of a polygon
 #[derive(Debug, Copy,Clone, PartialEq, Eq)]
 pub enum WindingOrder {
     Clockwise,
     CounterClockwise,
 }
 
+/// Only used for internal operations: type of boolean
+/// operation to perform on the polygons
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum BoolOpType {
     Intersection,
@@ -49,6 +52,9 @@ impl Default for Polygon {
 
 impl Polygon {
 
+    /// Substracts a polygon from the current one
+    ///
+    /// If the current polygon is empty, returns None.
     pub fn subtract(&self, other: &Self)
     -> Option<Vec<Self>>
     {
@@ -73,9 +79,6 @@ impl Polygon {
         self.calculate(other, BoolOpType::Xor)
     }
 
-    /// Substracts a polygon from the current one
-    ///
-    /// If the current polygon is empty, returns None.
     #[inline(always)]
     fn calculate(&self, other: &Self, operation_type: BoolOpType)
     -> Option<Vec<Self>>
@@ -152,7 +155,9 @@ impl Polygon {
                 connector.add_segment(Segment::new(event.p, unsafe { (*event.other_vec)[event.other_idx].p }));
                 while let Some(new_event) = event_queue.pop() {
                     if !new_event.left {
-                        connector.add_segment(Segment::new(new_event.p, unsafe { (*new_event.other_vec)[event.other_idx].p }));
+                        let other_p = unsafe { (*new_event.other_vec)[new_event.other_idx].p };
+                        let segment = Segment::new(new_event.p, other_p);
+                        connector.add_segment(segment);
                     }
                 }
                 break;
@@ -162,7 +167,56 @@ impl Polygon {
 
             if event.left {
                 // the current line segment must be inserted into the sweepline
+                sweep_line.insert(event);
+                let event_pos_in_sweep_line = sweep_line.get(&event);
+                event.position_in_sweep_line = event_pos_in_sweep_line;
+                let it = event_pos_in_sweep_line;
+                let next = event_pos_in_sweep_line;
+                let prev = event_pos_in_sweep_line;
 
+                /*
+                    e->poss = it = next = prev = S.insert(e).first;
+
+                    if (prev != S.begin()) {
+                        --prev;
+                    } else {
+                        prev = S.end();
+                    }
+
+                    // Compute the inside and inOut flags
+                    if (prev == S.end ()) {           // there is not a previous line segment in S?
+                        e->inside = e->inOut = false;
+                    } else if ((*prev)->type != NORMAL) {
+                        if (prev == S.begin ()) { // e overlaps with prev
+                            e->inside = true; // it is not relevant to set true or false
+                            e->inOut = false;
+                        } else {   // the previous two line segments in S are overlapping line segments
+                            sli = prev;
+                            sli--;
+                            if ((*prev)->pl == e->pl) {
+                                e->inOut  = !(*prev)->inOut;
+                                e->inside = !(*sli)->inOut;
+                            } else {
+                                e->inOut  = !(*sli)->inOut;
+                                e->inside = !(*prev)->inOut;
+                            }
+                        }
+                    } else if (e->pl == (*prev)->pl) { // previous line segment in S belongs to the same polygon that "e" belongs to
+                        e->inside = (*prev)->inside;
+                        e->inOut  = ! (*prev)->inOut;
+                    } else {                          // previous line segment in S belongs to a different polygon that "e" belongs to
+                        e->inside = ! (*prev)->inOut;
+                        e->inOut  = (*prev)->inside;
+                    }
+
+                    // Process a possible intersection between "e" and its next neighbor in S
+                    if ((++next) != S.end())
+                        possibleIntersection(e, *next);
+
+                    // Process a possible intersection between "e" and its previous neighbor in S
+                    if (prev != S.end ())
+                        possibleIntersection(*prev, e);
+                */
             } else {
                 // the current line segment must be removed into the sweepline
 
@@ -247,7 +301,13 @@ fn create_sweep_events(nodes: &[Point2D], polygon_type: PolygonType) -> Vec<Swee
     new_vec
 }
 
-fn calculate_winding(nodes: &[Point2D]) -> WindingOrder {
+/// Calculates the winding order of a polygon using the gaussian shoelace formula in O(n) time
+///
+/// # Panics
+///
+/// You must validate that there are at least three points in the nodes
+/// (otherwise, there is no winding order, it's just a point or a line)
+pub fn calculate_winding_order(nodes: &[Point2D]) -> WindingOrder {
     // cannot happen, since the parent function should
     // take care of early returning on invalid polygons
     assert!(nodes.len() > 2);
@@ -264,8 +324,8 @@ fn calculate_winding(nodes: &[Point2D]) -> WindingOrder {
     }
 }
 
-/// Calculates the bounding box of all points in the nodes
-fn calculate_bounding_box(nodes: &[Point2D]) -> Bbox {
+/// Calculates the bounding box of all points in the nodes in O(n) time
+pub fn calculate_bounding_box(nodes: &[Point2D]) -> Bbox {
 
     #[cfg(not(use_double_precision))]
     let mut min_x = ::std::f32::MAX;
@@ -309,6 +369,7 @@ fn calculate_bounding_box(nodes: &[Point2D]) -> Bbox {
 macro_rules! other {
     ($e:expr) => (unsafe { (*$e.other_vec).get_unchecked($e.other_idx)})
 }
+
 macro_rules! other_mut {
     ($e:expr) => (unsafe { (*$e.other_vec).get_unchecked_mut($e.other_idx)})
 }
