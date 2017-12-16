@@ -68,9 +68,8 @@ use super::Recover;
 /// }
 /// ```
 #[derive(Clone, Hash, PartialEq, Eq, Ord, PartialOrd)]
-
 pub struct BTreeSet<T> {
-    map: BTreeMap<T, ()>,
+    pub(crate) map: BTreeMap<T, ()>,
 }
 
 /// An iterator over the items of a `BTreeSet`.
@@ -576,6 +575,71 @@ impl<T: Ord> BTreeSet<T> {
 
     pub fn insert(&mut self, value: T) -> bool {
         self.map.insert(value, ()).is_none()
+    }
+
+    /// Inserts the value into the set, returns the index into the keys
+    /// of the newly inserted value
+    ///
+    /// If you want the key, get it with `self.map.keys_mut(idx)`
+    ///
+    /// Of course, if you remove something afterwards, the index will be invalid.
+    pub fn insert_return_index(&mut self, value: T) -> usize {
+
+        use super::node::InsertResult::*;
+        use super::search::SearchResult::*;
+
+        match super::search::search_tree(self.map.root.as_mut(), &value) {
+            Found(handle) => {
+                // stripped from the source of OccupiedEntry::insert()
+                return handle.idx;
+            }
+            GoDown(handle) => {
+                let mut self_length = &mut self.map.length;
+
+                // stripped from the source of VacantEntry::insert()
+
+                *self_length += 1;
+
+                // let out_ptr;
+
+                let mut ins_k;
+                let mut ins_v;
+                let mut ins_edge;
+
+                let mut cur_parent = match handle.insert(value, ()) {
+                    (Fit(handle), _) => return handle.idx,
+                    (Split(left, k, v, right), ptr) => {
+                        ins_k = k;
+                        ins_v = v;
+                        ins_edge = right;
+                        // out_ptr = ptr;
+                        left.ascend().map_err(|n| n.into_root_mut())
+                    }
+                };
+
+                loop {
+                    match cur_parent {
+                        Ok(parent) => {
+                            match parent.insert(ins_k, ins_v, ins_edge) {
+                                Fit(handle) => return handle.idx,
+                                Split(left, k, v, right) => {
+                                    ins_k = k;
+                                    ins_v = v;
+                                    ins_edge = right;
+                                    cur_parent = left.ascend().map_err(|n| n.into_root_mut());
+                                }
+                            }
+                        }
+                        Err(root) => {
+                            let mut lev = root.push_level();
+                            let len = lev.len();
+                            lev.push(ins_k, ins_v, ins_edge);
+                            return len;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Adds a value to the set, replacing the existing value, if any, that is equal to the given

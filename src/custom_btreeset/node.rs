@@ -749,7 +749,7 @@ impl<BorrowType, K, V> NodeRef<BorrowType, K, V, marker::LeafOrInternal> {
 /// to the left of the node, one between the two pairs, and one at the right of the node.
 pub struct Handle<Node, Type> {
     node: Node,
-    idx: usize,
+    pub(in custom_btreeset) idx: usize,
     _marker: PhantomData<Type>
 }
 

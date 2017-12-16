@@ -132,8 +132,8 @@ use self::Entry::*;
 /// *stat += random_stat_buff();
 /// ```
 pub struct BTreeMap<K, V> {
-    root: node::Root<K, V>,
-    length: usize,
+    pub(in custom_btreeset) root: node::Root<K, V>,
+    pub(in custom_btreeset) length: usize,
 }
 
 unsafe impl<#[may_dangle] K, #[may_dangle] V> Drop for BTreeMap<K, V> {
@@ -267,8 +267,8 @@ impl<K, Q: ?Sized> super::Recover<Q> for BTreeMap<K, ()>
 /// [`iter`]: struct.BTreeMap.html#method.iter
 /// [`BTreeMap`]: struct.BTreeMap.html
 pub struct Iter<'a, K: 'a, V: 'a> {
-    range: Range<'a, K, V>,
-    length: usize,
+    pub(in custom_btreeset) range: Range<'a, K, V>,
+    pub(in custom_btreeset) length: usize,
 }
 
 impl<'a, K: 'a + fmt::Debug, V: 'a + fmt::Debug> fmt::Debug for Iter<'a, K, V> {
@@ -455,12 +455,12 @@ impl<'a, K: 'a + Debug + Ord, V: 'a> Debug for VacantEntry<'a, K, V> {
 ///
 /// [`Entry`]: enum.Entry.html
 pub struct OccupiedEntry<'a, K: 'a, V: 'a> {
-    handle: Handle<NodeRef<marker::Mut<'a>, K, V, marker::LeafOrInternal>, marker::KV>,
+    pub(in custom_btreeset) handle: Handle<NodeRef<marker::Mut<'a>, K, V, marker::LeafOrInternal>, marker::KV>,
 
-    length: &'a mut usize,
+    pub(in custom_btreeset) length: &'a mut usize,
 
     // Be invariant in `K` and `V`
-    _marker: PhantomData<&'a mut (K, V)>,
+    pub(in custom_btreeset) _marker: PhantomData<&'a mut (K, V)>,
 }
 
 impl<'a, K: 'a + Debug + Ord, V: 'a + Debug> Debug for OccupiedEntry<'a, K, V> {
@@ -2140,7 +2140,7 @@ impl<'a, K: Ord, V> VacantEntry<'a, K, V> {
             match cur_parent {
                 Ok(parent) => {
                     match parent.insert(ins_k, ins_v, ins_edge) {
-                        Fit(_) => return unsafe { &mut *out_ptr },
+                        Fit(handle) => return unsafe { &mut *out_ptr },
                         Split(left, k, v, right) => {
                             ins_k = k;
                             ins_v = v;
@@ -2155,6 +2155,7 @@ impl<'a, K: Ord, V> VacantEntry<'a, K, V> {
                 }
             }
         }
+
     }
 }
 

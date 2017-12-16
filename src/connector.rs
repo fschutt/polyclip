@@ -17,11 +17,15 @@ impl<'a> Connector<'a> {
     }
 
     // replacement for `connector.toPolygon (result);`
-    pub(crate) fn to_polygons(mut self) -> Vec<Polygon> {
+    pub(crate) fn to_polygons(mut self) -> Option<Vec<Polygon>> {
 
         // filter empty chains
         self.open_polygons.retain(|x| !x.nodes_ref().is_empty());
         self.closed_polygons.retain(|x| !x.nodes_ref().is_empty());
+
+        if self.open_polygons.is_empty() && self.closed_polygons.is_empty() {
+            return None;
+        }
 
         let open_poly_len = self.open_polygons.len();
         let final_poly_len = open_poly_len + self.closed_polygons.len();
@@ -53,7 +57,7 @@ impl<'a> Connector<'a> {
             }
         }
 
-        final_polygons
+        Some(final_polygons)
     }
 
     pub fn add_segment(&mut self, segment: Segment<'a>) {

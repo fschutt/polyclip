@@ -12,6 +12,19 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 #![allow(non_camel_case_types)]
+#![warn(unused_features)]
+
+// NOTE: These features are only because the `std::collections::BTreeSet`
+// does not allow to immediately construct an iterator to the last inserted element,
+// which is crucial for performance. For now, this repository contains a fork of the
+// `std::collections::BTreeSet`, licensed under the Apache/MIT license
+// (see the main Rust repository) for details.
+
+// Tracking RFC: https://github.com/rust-lang/rfcs/pull/1194
+
+// However, I need this NOW and not in two years, so this should explain the fork.
+// A BTreeSet is just a BTreeMap with the value set to `()`, so an implementation
+// is fairly trivial.
 
 #![feature(core)]
 #![feature(generic_param_attrs)]

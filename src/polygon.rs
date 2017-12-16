@@ -1,7 +1,8 @@
 use {Point2D, Bbox, fsize};
 use sweep_event::{SweepEvent, PolygonType, EdgeType};
 use segment::Segment;
-use std::collections::{BTreeSet, BinaryHeap};
+use std::collections::BinaryHeap;
+use custom_btreeset::set::BTreeSet;
 
 /// Modifying the nodes of a polygon must be done via a closure,
 /// because if the points are modified, the bounding box has to be recomputed
@@ -20,6 +21,14 @@ pub struct Polygon {
     /// If you already know the winding order, please set it beforehand, to speed up
     /// the calculation.
     pub winding: Option<WindingOrder>,
+}
+
+macro_rules! other {
+    ($e:expr) => (unsafe { (*$e.other_vec).get_unchecked($e.other_idx)})
+}
+
+macro_rules! other_mut {
+    ($e:expr) => (unsafe { (*$e.other_vec).get_unchecked_mut($e.other_idx)})
 }
 
 /// Winding order of a polygon
@@ -141,7 +150,7 @@ impl Polygon {
         let minimum_x_bbox_pt = self_bbox.right.min(other_bbox.right);
 
         // calculate the necessary events
-        while let Some(event) = event_queue.pop() {
+        while let Some(mut event) = event_queue.pop() {
 
             // -----------------------------------------------------------------   optimization 1
 
@@ -167,63 +176,142 @@ impl Polygon {
 
             if event.left {
                 // the current line segment must be inserted into the sweepline
-                sweep_line.insert(event);
-                let event_pos_in_sweep_line = sweep_line.get(&event);
+
+                // NOTE: This won't work correctly. A BTreeSet cannot be indexed,
+                // since it is not contigouus in memory. This should return an
+                // interator instead, so that we can use .next() and the like.
+                //
+                // Returning a number as an index is only a placeholder and will 100%
+                // crash at runtime
+                let event_pos_in_sweep_line = sweep_line.insert_return_index(event);
+
+                // Also: Note that we are assigning to event here.
+                // Not sure if event should be a &mut Event
                 event.position_in_sweep_line = event_pos_in_sweep_line;
+
                 let it = event_pos_in_sweep_line;
                 let next = event_pos_in_sweep_line;
-                let prev = event_pos_in_sweep_line;
+                let mut prev = event_pos_in_sweep_line;
 
-                /*
-                    e->poss = it = next = prev = S.insert(e).first;
+                // TODO: does the sweep line get modified after this initial insert?
+                // If yes, the it iterator is invalid
 
-                    if (prev != S.begin()) {
-                        --prev;
+                let sweep_line_len = sweep_line.len();
+                // make "prev" wrap around
+                if prev != 0 {
+                    prev -= 1;
+                } else {
+                    prev = sweep_line_len;
+                }
+/*
+                if prev == sweep_line_len {
+                    // there is not a previous line segment in S?
+                    event.is_inside = false;
+                    event.in_out = false;
+                } else if sweep_line.map.keys_mut()[prev].edge_type != EdgeType::Normal {
+                    if prev == 0 {
+                        event.is_inside = true; // it is not relevant to set true or false
+                        event.in_out = false;
                     } else {
-                        prev = S.end();
-                    }
+                        // the previous two line segments in S are overlapping line segments
+                        let sli = prev;
+                        sli -= 1;
 
-                    // Compute the inside and inOut flags
-                    if (prev == S.end ()) {           // there is not a previous line segment in S?
-                        e->inside = e->inOut = false;
-                    } else if ((*prev)->type != NORMAL) {
-                        if (prev == S.begin ()) { // e overlaps with prev
-                            e->inside = true; // it is not relevant to set true or false
-                            e->inOut = false;
-                        } else {   // the previous two line segments in S are overlapping line segments
-                            sli = prev;
-                            sli--;
-                            if ((*prev)->pl == e->pl) {
-                                e->inOut  = !(*prev)->inOut;
-                                e->inside = !(*sli)->inOut;
-                            } else {
-                                e->inOut  = !(*sli)->inOut;
-                                e->inside = !(*prev)->inOut;
+                        let ptr_prev = sweep_line.map.keys_mut()[prev];
+                        let ptr_sli = sweep_line.map.keys_mut()[sli];
+
+                        if ptr_prev.polygon_type == event.polygon_type {
+                            event.in_out = !ptr_prev.in_out;
+                            event.is_inside = !ptr_sli.in_out;
+                        } else {
+                            event.in_out = !ptr_sli.in_out;
+                            event.is_inside = !ptr_prev.in_out;
+                        }
+                    }
+                } else if event.polygon_type == sweep_line.map.keys_mut()[prev].polygon_type {
+                    event.is_inside = sweep_line.map.keys_mut()[prev].inside;
+                    event.in_out = sweep_line.map.keys_mut()[prev].in_out;
+                } else {
+                    event.is_inside = sweep_line.map.keys_mut()[prev].in_out;
+                    event.in_out = sweep_line.map.keys_mut()[prev].inside;
+                }
+
+                if (next + 1) != sweep_line_len {
+                    possible_intersection(&mut event, &mut sweep_line.map.keys_mut()[next])
+                }
+
+                if prev != sweep_line_len {
+                    possible_intersection(&mut event, &mut sweep_line.map.keys_mut()[next])
+                }
+*/
+            } else {
+                // NOTE: In this block, there is no insertion happening!
+
+                // the current line segment must be removed into the sweep_line
+                let sli = other!(event).position_in_sweep_line;
+                let mut prev = sli;
+                let next = prev + 1;
+                let sweep_line_len = sweep_line.len();
+
+                // Get the next and previous line segments to "event" in sweep_line
+                if prev != 0 {
+                    prev -= 1;
+                } else {
+                    prev = sweep_line_len;
+                }
+
+                use self::EdgeType::*;
+                match event.edge_type {
+                    Normal => {
+                        match operation_type {
+                            Intersection => {
+                                if other!(event).is_inside {
+                                    connector.add_segment(Segment::new(event.p, other!(event).p));
+                                }
+                            },
+                            Union => {
+                                if !(other!(event).is_inside) {
+                                    connector.add_segment(Segment::new(event.p, other!(event).p));
+                                }
+                            },
+                            Difference => {
+                                if (event.polygon_type == PolygonType::Subject) && !(other!(event).is_inside) ||
+                                   (event.polygon_type == PolygonType::Clipping && other!(event).is_inside) {
+                                        connector.add_segment(Segment::new(event.p, other!(event).p));
+                                }
+                            },
+                            Xor => {
+                                connector.add_segment(Segment::new(event.p, other!(event).p));
                             }
                         }
-                    } else if (e->pl == (*prev)->pl) { // previous line segment in S belongs to the same polygon that "e" belongs to
-                        e->inside = (*prev)->inside;
-                        e->inOut  = ! (*prev)->inOut;
-                    } else {                          // previous line segment in S belongs to a different polygon that "e" belongs to
-                        e->inside = ! (*prev)->inOut;
-                        e->inOut  = (*prev)->inside;
-                    }
+                    },
+                    SameTransition => {
+                        if operation_type == Intersection || operation_type == Union {
+                            connector.add_segment(Segment::new(event.p, other!(event).p));
+                        }
+                    },
+                    DifferentTransition => {
+                        if operation_type == Difference {
+                            connector.add_segment(Segment::new(event.p, other!(event).p));
+                        }
+                    },
+                    NonContributing => { },
+                }
+/*
+                // delete line segment associated to event from sweep_line and
+                // check for intersection between the neighbors of "event" in sweep_line
+                sweep_line.remove(sli);
 
-                    // Process a possible intersection between "e" and its next neighbor in S
-                    if ((++next) != S.end())
-                        possibleIntersection(e, *next);
-
-                    // Process a possible intersection between "e" and its previous neighbor in S
-                    if (prev != S.end ())
-                        possibleIntersection(*prev, e);
-                */
-            } else {
-                // the current line segment must be removed into the sweepline
-
+                if next != sweep_line_len && prev != sweep_line_len {
+                    let ptr_prev = sweep_line.map.keys_mut()[prev];
+                    let ptr_next = sweep_line.map.keys_mut()[next];
+                    possible_intersection(ptr_prev, ptr_next);
+                }
+*/
             }
         }
 
-        return Some(connector.to_polygons());
+        connector.to_polygons()
     }
 }
 
@@ -366,14 +454,7 @@ pub fn calculate_bounding_box(nodes: &[Point2D]) -> Bbox {
     }
 }
 
-macro_rules! other {
-    ($e:expr) => (unsafe { (*$e.other_vec).get_unchecked($e.other_idx)})
-}
-
-macro_rules! other_mut {
-    ($e:expr) => (unsafe { (*$e.other_vec).get_unchecked_mut($e.other_idx)})
-}
-
+/// NOTE: `possible_intersection` is the only function that calls `point::line_intersect`
 fn possible_intersection(e1: &mut SweepEvent, e2: &mut SweepEvent) {
 
     // Uncomment the following line if overlapping edges are not allowed
