@@ -1,8 +1,9 @@
 use {Point2D, Bbox, fsize};
-use sweep_event::{SweepEvent, PolygonType, EdgeType};
+use sweep_event::{SweepEvent, SweepEventRef, PolygonType, EdgeType};
 use segment::Segment;
 use std::collections::BinaryHeap;
 use custom_btreeset::set::BTreeSet;
+use std::cell::UnsafeCell;
 
 /// Modifying the nodes of a polygon must be done via a closure,
 /// because if the points are modified, the bounding box has to be recomputed
@@ -21,14 +22,6 @@ pub struct Polygon {
     /// If you already know the winding order, please set it beforehand, to speed up
     /// the calculation.
     pub winding: Option<WindingOrder>,
-}
-
-macro_rules! other {
-    ($e:expr) => (unsafe { (*$e.other_vec).get_unchecked($e.other_idx)})
-}
-
-macro_rules! other_mut {
-    ($e:expr) => (unsafe { (*$e.other_vec).get_unchecked_mut($e.other_idx)})
 }
 
 /// Winding order of a polygon
@@ -138,18 +131,24 @@ impl Polygon {
         // Create the sweep events
         let vec_of_sweep_events_subject = create_sweep_events(&self.nodes, PolygonType::Subject);
         let vec_of_sweep_events_clipping = create_sweep_events(&other.nodes, PolygonType::Clipping);
+
         // Sort the sweep events
         // Insert all the endpoints associated to the line segments into the event queue
-        let mut event_queue = BinaryHeap::<SweepEvent>::with_capacity((self.nodes.len() * 2) + (other.nodes.len() * 2));
+        let mut event_queue = BinaryHeap::<&SweepEventRef>::with_capacity((self.nodes.len() * 2) + (other.nodes.len() * 2));
 
-        for event in &vec_of_sweep_events_subject { event_queue.push(event.clone()); }
-        for event in &vec_of_sweep_events_clipping { event_queue.push(event.clone()); }
+        for event in &vec_of_sweep_events_subject {
+            event_queue.push(event);
+        }
+
+        for event in &vec_of_sweep_events_clipping {
+            event_queue.push(event);
+        }
 
         // -------------------------------------------------------------------- sweep events created
 
         let mut connector = Connector::new();
-        let mut sweep_line = BTreeSet::<SweepEvent>::new();
-        let mut event_holder = Vec::<SweepEvent>::new();
+        let mut sweep_line = BTreeSet::<&SweepEventRef>::new();
+        let mut event_holder = Vec::<SweepEventRef>::new();
 
         let minimum_x_bbox_pt = self_bbox.right.min(other_bbox.right);
 
@@ -158,19 +157,17 @@ impl Polygon {
 
             // -----------------------------------------------------------------   optimization 1
 
-            if (operation_type == Intersection && (event.p.x > minimum_x_bbox_pt)) ||
-               (operation_type == Difference && (event.p.x > self_bbox.right)) {
+            if (operation_type == Intersection && (inner!(event).p.x > minimum_x_bbox_pt)) ||
+               (operation_type == Difference && (inner!(event).p.x > self_bbox.right)) {
                 break;
             }
 
-            if operation_type == Union && (event.p.x > minimum_x_bbox_pt) && !event.left {
+            if operation_type == Union && (inner!(event).p.x > minimum_x_bbox_pt) && !inner!(event).left {
                 // add all the non-processed line segments to the result
-                connector.add_segment(Segment::new(event.p, unsafe { (*event.other_vec)[event.other_idx].p }));
+                connector.add_segment(Segment::new(inner!(event).p, other!(event).p));
                 while let Some(new_event) = event_queue.pop() {
-                    if !new_event.left {
-                        let other_p = unsafe { (*new_event.other_vec)[new_event.other_idx].p };
-                        let segment = Segment::new(new_event.p, other_p);
-                        connector.add_segment(segment);
+                    if !inner!(new_event).left {
+                        connector.add_segment(Segment::new(inner!(new_event).p, other!(new_event).p));
                     }
                 }
                 break;
@@ -178,7 +175,7 @@ impl Polygon {
 
             // ---------------------------------------------------------------- end of optimization 1
 
-            if event.left {
+            if inner!(event).left {
                 // the current line segment must be inserted into the sweepline
 
                 // NOTE: This won't work correctly. A BTreeSet cannot be indexed,
@@ -191,7 +188,7 @@ impl Polygon {
 
                 // Also: Note that we are assigning to event here.
                 // Not sure if event should be a &mut Event
-                event.position_in_sweep_line = event_pos_in_sweep_line;
+                inner_mut!(event).position_in_sweep_line = event_pos_in_sweep_line;
 
                 let it = event_pos_in_sweep_line;
                 let next = event_pos_in_sweep_line;
@@ -264,38 +261,38 @@ impl Polygon {
                     prev = sweep_line_len;
                 }
 
-                match event.edge_type {
+                match inner!(event).edge_type {
                     Normal => {
                         match operation_type {
                             Intersection => {
                                 if other!(event).is_inside {
-                                    connector.add_segment(Segment::new(event.p, other!(event).p));
+                                    connector.add_segment(Segment::new(inner!(event).p, other!(event).p));
                                 }
                             },
                             Union => {
                                 if !(other!(event).is_inside) {
-                                    connector.add_segment(Segment::new(event.p, other!(event).p));
+                                    connector.add_segment(Segment::new(inner!(event).p, other!(event).p));
                                 }
                             },
                             Difference => {
-                                if (event.polygon_type == PolygonType::Subject) && !(other!(event).is_inside) ||
-                                   (event.polygon_type == PolygonType::Clipping && other!(event).is_inside) {
-                                        connector.add_segment(Segment::new(event.p, other!(event).p));
+                                if (inner!(event).polygon_type == PolygonType::Subject) && !(other!(event).is_inside) ||
+                                   (inner!(event).polygon_type == PolygonType::Clipping && other!(event).is_inside) {
+                                        connector.add_segment(Segment::new(inner!(event).p, other!(event).p));
                                 }
                             },
                             Xor => {
-                                connector.add_segment(Segment::new(event.p, other!(event).p));
+                                connector.add_segment(Segment::new(inner!(event).p, other!(event).p));
                             }
                         }
                     },
                     SameTransition => {
                         if operation_type == Intersection || operation_type == Union {
-                            connector.add_segment(Segment::new(event.p, other!(event).p));
+                            connector.add_segment(Segment::new(inner!(event).p, other!(event).p));
                         }
                     },
                     DifferentTransition => {
                         if operation_type == Difference {
-                            connector.add_segment(Segment::new(event.p, other!(event).p));
+                            connector.add_segment(Segment::new(inner!(event).p, other!(event).p));
                         }
                     },
                     NonContributing => { },
@@ -319,14 +316,10 @@ impl Polygon {
 }
 
 // DO NOT modify the return type, otherwise you will invalidate all internal pointers!
-//
-// __WARNING__: Extremely important that this is `#[inline(always)]`,
-// otherwise the self-referential pointers get invalidated because of a move!
-#[inline(always)]
-fn create_sweep_events(nodes: &[Point2D], polygon_type: PolygonType) -> Vec<SweepEvent> {
+fn create_sweep_events(nodes: &[Point2D], polygon_type: PolygonType) -> Vec<SweepEventRef> {
 
     let vec_len = nodes.len() * 2;
-    let mut new_vec = Vec::<SweepEvent>::with_capacity(vec_len);
+    let mut new_vec = Vec::<SweepEventRef>::with_capacity(vec_len);
     unsafe { new_vec.set_len(vec_len); }
 
     let iter1 = nodes.iter();
@@ -354,32 +347,36 @@ fn create_sweep_events(nodes: &[Point2D], polygon_type: PolygonType) -> Vec<Swee
         let e1_idx = cur_pt_idx;
         let e2_idx = cur_pt_idx + 1;
 
-        let e1 = SweepEvent {
-            p: cur_point,
-            other_vec: &new_vec,
-            other_idx: e2_idx,
-            left: e1_left,
-            position_in_sweep_line: 0,
-            polygon_type: polygon_type,
-            in_out: false,
-            is_inside: false,
-            edge_type: EdgeType::Normal,
+        let e1 = SweepEventRef {
+            inner: UnsafeCell::new(SweepEvent {
+                p: cur_point,
+                other: unsafe { ::std::mem::zeroed() },
+                left: e1_left,
+                position_in_sweep_line: 0,
+                polygon_type: polygon_type,
+                in_out: false,
+                is_inside: false,
+                edge_type: EdgeType::Normal,
+            })
         };
 
-        let e2 = SweepEvent {
-            p: next_point,
-            other_vec: &new_vec,
-            other_idx: e1_idx,
-            position_in_sweep_line: 0,
-            left: e2_left,
-            polygon_type: polygon_type,
-            in_out: false,
-            is_inside: false,
-            edge_type: EdgeType::Normal,
+        unsafe { *new_vec.get_unchecked_mut(e1_idx) = e1; }
+
+        let e2 = SweepEventRef {
+            inner: UnsafeCell::new(SweepEvent {
+                p: next_point,
+                other: unsafe { new_vec.get_unchecked(e1_idx) }, // new_vec does not live long enough
+                position_in_sweep_line: 0,
+                left: e2_left,
+                polygon_type: polygon_type,
+                in_out: false,
+                is_inside: false,
+                edge_type: EdgeType::Normal,
+            })
         };
 
-        new_vec[e1_idx] = e1;
-        new_vec[e2_idx] = e2;
+        unsafe { *new_vec.get_unchecked_mut(e2_idx) = e2; }
+        unsafe { (*new_vec.get_unchecked_mut(e1_idx).inner.get()).other = new_vec.get_unchecked(e2_idx); }
 
         cur_pt_idx += 2;
     }
@@ -458,14 +455,12 @@ pub fn calculate_bounding_box(nodes: &[Point2D]) -> Bbox {
 }
 
 /// NOTE: `possible_intersection` is the only function that calls `point::line_intersect`
-fn possible_intersection(e1: &mut SweepEvent, e2: &mut SweepEvent) {
+fn possible_intersection(e1: &SweepEventRef, e2: &SweepEventRef) {
 
     // Uncomment the following line if overlapping edges are not allowed
     // if e1.polygon_type == e2.polygon_type { return; }
 
 
-    // event = event_vec[event_idx]
-    //
     // __WARNING__: It is assumed that `event_vec` == `event.other_vec`, i.e. that
     // event_vec only stores references to itself.
     //
@@ -475,39 +470,37 @@ fn possible_intersection(e1: &mut SweepEvent, e2: &mut SweepEvent) {
     // This function essentially moves events from the event_vec to the event_holder
     //
     // Do not call this function on the same index twice!
-    fn divide_segment<'a>(event_vec: &'a mut Vec<SweepEvent<'a>>,
-                          event_idx: usize,
+    fn divide_segment<'a>(event: &'a SweepEventRef<'a>,
                           divide_pt: &'a Point2D,
-                          event_holder: &mut Vec<SweepEvent<'a>>,
-                          eq: &mut BinaryHeap<SweepEvent<'a>>)
+                          event_holder: &'a mut Vec<SweepEventRef<'a>>,
+                          eq: &mut BinaryHeap<&SweepEventRef<'a>>)
     {
-        let event_clone = event_vec[event_idx].clone();
         {
             // push right event
-            event_holder.push(SweepEvent {
-                p: divide_pt,
-                left: false,
-                polygon_type: event_clone.polygon_type,
-                other_vec: event_clone.other_vec,
-                other_idx: event_clone.other_idx,
-                in_out: false,
-                position_in_sweep_line: 0,
-                is_inside: false,
-                edge_type: event_clone.edge_type,
-            });
+            event_holder.push(SweepEventRef {
+                inner: UnsafeCell::new(SweepEvent {
+                    p: divide_pt,
+                    left: false,
+                    polygon_type: inner!(event).polygon_type,
+                    other: inner!(event).other,
+                    in_out: false,
+                    position_in_sweep_line: 0,
+                    is_inside: false,
+                    edge_type: inner!(event).edge_type,
+            })});
 
             // push left event
-            event_holder.push(SweepEvent {
-                p: divide_pt,
-                left: true,
-                polygon_type: event_clone.polygon_type,
-                other_vec: event_clone.other_vec,
-                other_idx: event_clone.other_idx,
-                in_out: false,
-                position_in_sweep_line: 0,
-                is_inside: false,
-                edge_type: unsafe { (*event_clone.other_vec)[event_clone.other_idx].edge_type },
-            });
+            event_holder.push(SweepEventRef {
+                inner: UnsafeCell::new(SweepEvent {
+                    p: divide_pt,
+                    left: true,
+                    polygon_type: inner!(event).polygon_type,
+                    other: inner!(event).other,
+                    in_out: false,
+                    position_in_sweep_line: 0,
+                    is_inside: false,
+                    edge_type: inner!(event).edge_type,
+            })});
         }
 
         let last = event_holder.len() - 1;
@@ -515,13 +508,9 @@ fn possible_intersection(e1: &mut SweepEvent, e2: &mut SweepEvent) {
         {
             let left = event_holder.get_mut(last).unwrap();
 
-            if left.compare(unsafe { &(*event_clone.other_vec)[event_clone.other_idx] }) {
-                // avoid a rounding error. The left event would be processed after the right event
-                // original: (*event.other_vec)[event.other_idx].left = true
-                //
-                // assumes that `event.other_vec` == `event_vec`
-                event_vec[event_clone.other_idx].left = true;
-                left.left = false;
+            if inner!(left).compare(other!(event)) {
+                other_mut!(event).left = true;
+                inner_mut!(left).left = false;
             }
         }
 
@@ -537,17 +526,11 @@ fn possible_intersection(e1: &mut SweepEvent, e2: &mut SweepEvent) {
             eq.push(right);
         */
 
-        let event_other_idx = event_vec[event_idx].other_idx;
+        other_mut!(event).other = left;
+        inner_mut!(event).other = right;
 
-        // assumes that `event.other_vec` == `event_vec`
-        event_vec[event_other_idx].other_vec = event_holder;
-        event_vec[event_other_idx].other_idx = last;
-
-        event_vec[event_idx].other_vec = event_holder;
-        event_vec[event_idx].other_idx = last - 1;
-
-        eq.push(left.clone());
-        eq.push(right.clone());
+        // eq.push(left.clone());
+        // eq.push(right.clone());
     }
 
     // end of divide_segment()
@@ -556,7 +539,7 @@ fn possible_intersection(e1: &mut SweepEvent, e2: &mut SweepEvent) {
     let e1_other_p = other!(e1).p;
     let e2_other_p = other!(e2).p;
 
-    let result = ::point::line_intersect(&e1.p, &e1_other_p, &e2.p, &e2_other_p);
+    let result = ::point::line_intersect(&inner!(e1).p, &e1_other_p, &inner!(e2).p, &e2_other_p);
 
     let (a, b) = match result {
         Some(a) => (a.0, a.1),
@@ -567,20 +550,20 @@ fn possible_intersection(e1: &mut SweepEvent, e2: &mut SweepEvent) {
 
     match b {
         Some(new) => {
-            if e1.polygon_type == e2.polygon_type {
+            if inner!(e1).polygon_type == inner!(e2).polygon_type {
                 eprintln!("A polygon has overlapping edges. Sorry, but the program does not work yet with this kind of polygon");
                 return;
             }
             new_b = new;
         },
         None => {
-            if !((e1.p == e2.p) || (e1_other_p == e2_other_p)){
-                if *e1.p != a && *e1_other_p != a {
+            if !((inner!(e1).p == inner!(e2).p) || (e1_other_p == e2_other_p)){
+                if *inner!(e1).p != a && *e1_other_p != a {
                     // if a is not an endpoint of the line segment associated to e1 then divide "e1"
                     // divide_segment(e1, a);
                 }
 
-                if *e2.p != a && *e2_other_p != a {
+                if *inner!(e2).p != a && *e2_other_p != a {
                     // divide_segment(e2, a);
                 }
             }
@@ -591,11 +574,9 @@ fn possible_intersection(e1: &mut SweepEvent, e2: &mut SweepEvent) {
         },
     }
 
-    // --- the code below is not correct!
-
     // the line segments overlap
     let mut sorted_events = Vec::<Option<&SweepEvent>>::with_capacity(4);
-
+/*
     if e1.p == e2.p {
         sorted_events.push(None)
     } else if e1.compare(e2) {
@@ -615,6 +596,7 @@ fn possible_intersection(e1: &mut SweepEvent, e2: &mut SweepEvent) {
         sorted_events.push(Some(other!(e1)));
         sorted_events.push(Some(other!(e2)));
     }
+*/
 /*
     if sorted_events.len() == 2 {
         // are both line segments equal?

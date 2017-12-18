@@ -2,6 +2,21 @@
 
 use Point2D;
 use ::std::cmp::Ordering;
+use std::cell::UnsafeCell;
+
+/// Wrapper struct so we can implement `Ord` on `UnsafeCell<SweepEvent>`
+#[derive(Debug)]
+pub(crate) struct SweepEventRef<'a> {
+    pub(crate) inner: UnsafeCell<SweepEvent<'a>>
+}
+
+impl<'a> PartialEq for SweepEventRef<'a> {
+    fn eq(&self, other: &SweepEventRef) -> bool {
+        (self.inner.get() as usize) == (other.inner.get() as usize)
+    }
+}
+
+impl<'a> Eq for SweepEventRef<'a> { }
 
 /// Indicates if the edge belongs to the subject or clipping polygon
 #[derive(Debug, PartialEq, Copy, Clone, Eq)]
@@ -20,23 +35,12 @@ pub(crate) enum EdgeType {
 
 // NOTE: Rust does struct layout optimization. It is useless to use bitfields here,
 // Rust creates bitfields automatically. The size of the SweepEvent is 24 bytes total
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct SweepEvent<'a> {
     /// Point associated with the event
     pub p: &'a Point2D,
     /// other: Event associated to the other endpoint of the edge
-    ///
-    /// other_vec is the vec of the sweep event. The `Vec` cannot move, but
-    /// the layout of the vector can grow and shrink.
-    /// In order to avoid a dereference of an invalid pointer, we store a reference
-    /// to the vector + and index (other_index)
-    ///
-    /// Rust does cannot modify a Vec if it's borrowed. This is why this is not a &'a reference -
-    /// we sometimes still have to push to the end of vector. However, the index would stay the same.
-    /// This is not the case when using a pointer. Maybe in the future this can be elided.
-    pub other_vec: *const Vec<SweepEvent<'a>>,
-    /// The index into the vector where the other value lives
-    pub other_idx: usize,
+    pub other: *const SweepEventRef<'a>,
     /// Polygon type
     pub polygon_type: PolygonType,
     /// Only used in "left" events. Index of the event (line segment) in the current sweep line.
@@ -59,15 +63,64 @@ pub(crate) struct SweepEvent<'a> {
     pub edge_type: EdgeType,
 }
 
+impl<'a> PartialOrd for SweepEvent<'a> {
+    fn partial_cmp(&self, other: &SweepEvent) -> Option<Ordering> {
+        // Return true means that other is placed at the event queue after self
+        // i.e,, self is processed by the algorithm after other
+        if self.compare(other) {
+            Some(Ordering::Greater)
+        } else {
+            Some(Ordering::Less)
+        }
+    }
+}
+
+impl<'a> PartialOrd for SweepEventRef<'a> {
+    fn partial_cmp(&self, other: &SweepEventRef) -> Option<Ordering> {
+        // Return true means that other is placed at the event queue after self
+        // i.e,, self is processed by the algorithm after other
+        if inner!(self).compare(inner!(other)) {
+            Some(Ordering::Greater)
+        } else {
+            Some(Ordering::Less)
+        }
+    }
+}
+
+impl<'a> Ord for SweepEventRef<'a> {
+    fn cmp(&self, other: &SweepEventRef) -> Ordering {
+        unsafe {
+            if (*self.inner.get()).compare(&(*other.inner.get())) {
+                Ordering::Greater
+            } else {
+                Ordering::Less
+            }
+        }
+    }
+}
+
+impl<'a> Ord for SweepEvent<'a> {
+    fn cmp(&self, other: &SweepEvent) -> Ordering {
+        if self.compare(other) {
+            Ordering::Greater
+        } else {
+            Ordering::Less
+        }
+    }
+}
+
+
 impl<'a> SweepEvent<'a> {
 
     /// Is the line segment (p, other->p) below point x
     #[inline]
     pub fn below(&self, other: &Point2D) -> bool {
-        if self.left {
-            ::utils::calculate_signed_area3(&self.p, unsafe { &(*self.other_vec)[self.other_idx].p }, other) > 0.0
-        } else {
-            ::utils::calculate_signed_area3(unsafe { &(*self.other_vec)[self.other_idx].p }, &self.p, other) > 0.0
+        unsafe {
+            if self.left {
+                ::utils::calculate_signed_area3(&self.p, unsafe { &(*(*self.other).inner.get()).p }, other) > 0.0
+            } else {
+                ::utils::calculate_signed_area3(unsafe { &(*(*self.other).inner.get()).p }, &self.p, other) > 0.0
+            }
         }
     }
 
@@ -104,8 +157,7 @@ impl<'a> SweepEvent<'a> {
 
         // Same point, both events are left endpoints or both are right endpoints.
         // The event associated to the bottom segment is processed first
-        let vec = unsafe { &*other.other_vec };
-        return self.above(vec[other.other_idx].p);
+        return unsafe { self.above(&(*(*self.other).inner.get()).p) };
     }
 
     /// Function to set inside and in_out flags for a left endpoint.
@@ -134,23 +186,5 @@ impl<'a> SweepEvent<'a> {
                 }
             }
         }
-    }
-}
-
-impl<'a> PartialOrd for SweepEvent<'a> {
-    fn partial_cmp(&self, other: &SweepEvent) -> Option<Ordering> {
-        // Return true means that other is placed at the event queue after self
-        // i.e,, self is processed by the algorithm after other
-        if self.compare(other) {
-            Some(Ordering::Greater)
-        } else {
-            Some(Ordering::Less)
-        }
-    }
-}
-
-impl<'a> Ord for SweepEvent<'a> {
-    fn cmp(&self, other: &SweepEvent) -> Ordering {
-        self.partial_cmp(other).unwrap()
     }
 }

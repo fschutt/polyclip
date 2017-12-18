@@ -55,59 +55,59 @@ pub fn line_intersect(p0: &Point2D, p1: &Point2D, p2: &Point2D, p3: &Point2D)
 #[test]
 pub(crate) fn test_line_intersect_none() {
     // No Intersect
-    let result1 = line_intersect(Point2D { x: 0.0,  y: 0.0 },
-                                 Point2D { x: 2.0,  y: 8.0 },
-                                 Point2D { x: 8.0,  y: 0.0 },
-                                 Point2D { x: 0.0,  y: 20.0});
+    let result1 = line_intersect(&Point2D { x: 0.0,  y: 0.0 },
+                                 &Point2D { x: 2.0,  y: 8.0 },
+                                 &Point2D { x: 8.0,  y: 0.0 },
+                                 &Point2D { x: 0.0,  y: 20.0});
     assert!(result1.is_none());
 }
 
 #[test]
 pub(crate) fn test_line_intersect_intersect() {
     // Intersect
-    let result1 = line_intersect(Point2D { x: 0.0,  y: 10.0},
-                                 Point2D { x: 2.0,  y: 0.0 },
-                                 Point2D { x: 10.0, y: 0.0 },
-                                 Point2D { x: 0.0,  y: 5.0 });
+    let result1 = line_intersect(&Point2D { x: 0.0,  y: 10.0},
+                                 &Point2D { x: 2.0,  y: 0.0 },
+                                 &Point2D { x: 10.0, y: 0.0 },
+                                 &Point2D { x: 0.0,  y: 5.0 });
     assert!(result1.is_some());
 }
 
 #[test]
 pub(crate) fn test_line_intersect_parallel_vertical() {
     // Parallel, vertical
-    let result = line_intersect(Point2D { x: 0.0,  y: 0.0},
-                                Point2D { x: 0.0,  y: 10.0 },
-                                Point2D { x: 2.0,  y: 0.0 },
-                                Point2D { x: 2.0,  y: 10.0 });
+    let result = line_intersect(&Point2D { x: 0.0,  y: 0.0},
+                                &Point2D { x: 0.0,  y: 10.0 },
+                                &Point2D { x: 2.0,  y: 0.0 },
+                                &Point2D { x: 2.0,  y: 10.0 });
     assert!(result.is_none());
 }
 
 #[test]
 pub(crate) fn test_line_intersect_parallel_diagonal() {
     // Parallel, diagonal
-    let result = line_intersect(Point2D { x: 0.0,  y: 0.0},
-                                Point2D { x: 5.0,  y: 5.0 },
-                                Point2D { x: 2.0,  y: 0.0 },
-                                Point2D { x: 7.0,  y: 5.0 });
+    let result = line_intersect(&Point2D { x: 0.0,  y: 0.0},
+                                &Point2D { x: 5.0,  y: 5.0 },
+                                &Point2D { x: 2.0,  y: 0.0 },
+                                &Point2D { x: 7.0,  y: 5.0 });
     assert!(result.is_none());
 }
 
 #[test]
 pub(crate) fn test_line_intersect_colinear_overlap() {
     // Collinear, overlap
-    let result = line_intersect(Point2D { x: 0.0,  y: 0.0 },
-                                Point2D { x: 5.0,  y: 5.0 },
-                                Point2D { x: 2.0,  y: 2.0 },
-                                Point2D { x: 7.0,  y: 7.0 });
+    let result = line_intersect(&Point2D { x: 0.0,  y: 0.0 },
+                                &Point2D { x: 5.0,  y: 5.0 },
+                                &Point2D { x: 2.0,  y: 2.0 },
+                                &Point2D { x: 7.0,  y: 7.0 });
     assert!(result.is_some());
 }
 
 #[test]
 pub(crate) fn test_line_intersect_colinear_nooverlap() {
     // Collinear, no overlap
-    let result = line_intersect(Point2D { x: 0.0,  y: 0.0 },
-                                Point2D { x: 5.0,  y: 5.0 },
-                                Point2D { x: 7.0,  y: 7.0 },
-                                Point2D { x: 10.0,  y: 10.0 });
+    let result = line_intersect(&Point2D { x: 0.0,  y: 0.0 },
+                                &Point2D { x: 5.0,  y: 5.0 },
+                                &Point2D { x: 7.0,  y: 7.0 },
+                                &Point2D { x: 10.0,  y: 10.0 });
     assert!(result.is_some());
 }

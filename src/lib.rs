@@ -13,6 +13,7 @@
 #![allow(unused_variables)]
 #![allow(non_camel_case_types)]
 #![warn(unused_features)]
+#![allow(unused_unsafe)]
 
 // NOTE: These features are only because the `std::collections::BTreeSet`
 // does not allow to immediately construct an iterator to the last inserted element,
@@ -41,6 +42,22 @@ extern crate core;
 pub type fsize = f32;
 #[cfg(use_double_precision)]
 pub type fsize = f64;
+
+macro_rules! inner {
+    ($e:expr) => ((unsafe { &*$e.inner.get() }))
+}
+
+macro_rules! inner_mut {
+    ($e:expr) => ((unsafe { &mut *$e.inner.get() }))
+}
+
+macro_rules! other {
+    ($e:expr) => (unsafe { &(*(*inner!($e).other).inner.get()) })
+}
+
+macro_rules! other_mut {
+    ($e:expr) => (unsafe { &mut (*(*inner!($e).other).inner.get()) })
+}
 
 mod bbox;
 mod connector;
