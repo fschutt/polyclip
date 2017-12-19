@@ -21,6 +21,11 @@ use core::ops::{BitOr, BitAnd, BitXor, Sub};
 use core::borrow::Borrow;
 use super::map::{BTreeMap, Keys};
 use super::Recover;
+use super::set::Iter as SetIter;
+use super::map::Keys as MapKeys;
+use super::map::Range as MapRange;
+use super::map::Iter as MapIter;
+use super::map::last_leaf_edge;
 
 // FIXME(conventions): implement bounded iterators
 
@@ -583,15 +588,17 @@ impl<T: Ord> BTreeSet<T> {
     /// If you want the key, get it with `self.map.keys_mut(idx)`
     ///
     /// Of course, if you remove something afterwards, the index will be invalid.
-    pub fn insert_return_index(&mut self, value: T) -> usize {
+    pub fn insert_return_index(&mut self, value: T) -> SetIter<T> {
 
         use super::node::InsertResult::*;
         use super::search::SearchResult::*;
 
+        let main_handle;
+
         match super::search::search_tree(self.map.root.as_mut(), &value) {
             Found(handle) => {
                 // stripped from the source of OccupiedEntry::insert()
-                return handle.idx;
+                main_handle = handle;
             }
             GoDown(handle) => {
                 let mut self_length = &mut self.map.length;
@@ -601,13 +608,12 @@ impl<T: Ord> BTreeSet<T> {
                 *self_length += 1;
 
                 // let out_ptr;
-
                 let mut ins_k;
                 let mut ins_v;
                 let mut ins_edge;
 
                 let mut cur_parent = match handle.insert(value, ()) {
-                    (Fit(handle), _) => return handle.idx,
+                    (Fit(handle), _) => { main_handle = handle; },
                     (Split(left, k, v, right), ptr) => {
                         ins_k = k;
                         ins_v = v;
@@ -621,7 +627,7 @@ impl<T: Ord> BTreeSet<T> {
                     match cur_parent {
                         Ok(parent) => {
                             match parent.insert(ins_k, ins_v, ins_edge) {
-                                Fit(handle) => return handle.idx,
+                                Fit(handle) => { main_handle = handle; break; },
                                 Split(left, k, v, right) => {
                                     ins_k = k;
                                     ins_v = v;
@@ -634,9 +640,35 @@ impl<T: Ord> BTreeSet<T> {
                             let mut lev = root.push_level();
                             let len = lev.len();
                             lev.push(ins_k, ins_v, ins_edge);
-                            return len;
+                            main_handle = lev;
+                            break;
                         }
                     }
+                }
+            }
+        }
+/*
+        pub struct Iter<'a, T: 'a> {
+            iter: Keys<'a, T, ()>,
+        }
+
+        pub struct Keys<'a, K: 'a, V: 'a> {
+            inner: Iter<'a, K, V>,
+        }
+
+        pub struct Iter<'a, K: 'a, V: 'a> {
+            pub(in custom_btreeset) range: Range<'a, K, V>,
+            pub(in custom_btreeset) length: usize,
+        }
+*/
+        SetIter {
+            iter: MapKeys {
+                inner: MapIter {
+                    range: MapRange {
+                        front: main_handle,
+                        back: last_leaf_edge(self.map.root.as_ref()),
+                    },
+                    length: self.map.length,
                 }
             }
         }

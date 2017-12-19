@@ -204,15 +204,15 @@ impl Polygon {
                 } else {
                     prev = sweep_line_len;
                 }
-/*
+
                 if prev == sweep_line_len {
                     // there is not a previous line segment in S?
-                    event.is_inside = false;
-                    event.in_out = false;
+                    inner!(event).is_inside = false;
+                    inner!(event).in_out = false;
                 } else if sweep_line.map.keys_mut()[prev].edge_type != EdgeType::Normal {
                     if prev == 0 {
-                        event.is_inside = true; // it is not relevant to set true or false
-                        event.in_out = false;
+                        inner!(event).is_inside = true; // it is not relevant to set true or false
+                        inner!(event).in_out = false;
                     } else {
                         // the previous two line segments in S are overlapping line segments
                         let sli = prev;
@@ -221,20 +221,20 @@ impl Polygon {
                         let ptr_prev = sweep_line.map.keys_mut()[prev];
                         let ptr_sli = sweep_line.map.keys_mut()[sli];
 
-                        if ptr_prev.polygon_type == event.polygon_type {
-                            event.in_out = !ptr_prev.in_out;
-                            event.is_inside = !ptr_sli.in_out;
+                        if ptr_prev.polygon_type == inner!(event).polygon_type {
+                            inner!(event).in_out = !ptr_prev.in_out;
+                            inner!(event).is_inside = !ptr_sli.in_out;
                         } else {
-                            event.in_out = !ptr_sli.in_out;
-                            event.is_inside = !ptr_prev.in_out;
+                            inner!(event).in_out = !ptr_sli.in_out;
+                            inner!(event).is_inside = !ptr_prev.in_out;
                         }
                     }
-                } else if event.polygon_type == sweep_line.map.keys_mut()[prev].polygon_type {
-                    event.is_inside = sweep_line.map.keys_mut()[prev].inside;
-                    event.in_out = sweep_line.map.keys_mut()[prev].in_out;
+                } else if inner!(event).polygon_type == sweep_line.map.keys_mut()[prev].polygon_type {
+                    inner!(event).is_inside = sweep_line.map.keys_mut()[prev].inside;
+                    inner!(event).in_out = sweep_line.map.keys_mut()[prev].in_out;
                 } else {
-                    event.is_inside = sweep_line.map.keys_mut()[prev].in_out;
-                    event.in_out = sweep_line.map.keys_mut()[prev].inside;
+                    inner!(event).is_inside = sweep_line.map.keys_mut()[prev].in_out;
+                    inner!(event).in_out = sweep_line.map.keys_mut()[prev].inside;
                 }
 
                 if (next + 1) != sweep_line_len {
@@ -244,7 +244,7 @@ impl Polygon {
                 if prev != sweep_line_len {
                     possible_intersection(&mut event, &mut sweep_line.map.keys_mut()[next])
                 }
-*/
+
             } else {
                 // NOTE: In this block, there is no insertion happening!
 
@@ -297,17 +297,16 @@ impl Polygon {
                     },
                     NonContributing => { },
                 }
-/*
+
                 // delete line segment associated to event from sweep_line and
                 // check for intersection between the neighbors of "event" in sweep_line
-                sweep_line.remove(sli);
+                sweep_line.remove(&sli);
 
                 if next != sweep_line_len && prev != sweep_line_len {
                     let ptr_prev = sweep_line.map.keys_mut()[prev];
                     let ptr_next = sweep_line.map.keys_mut()[next];
                     possible_intersection(ptr_prev, ptr_next);
                 }
-*/
             }
         }
 
@@ -316,7 +315,7 @@ impl Polygon {
 }
 
 // DO NOT modify the return type, otherwise you will invalidate all internal pointers!
-fn create_sweep_events(nodes: &[Point2D], polygon_type: PolygonType) -> Vec<SweepEventRef> {
+fn create_sweep_events(nodes: &[Point2D], polygon_type: PolygonType) ->Vec<SweepEventRef> {
 
     let vec_len = nodes.len() * 2;
     let mut new_vec = Vec::<SweepEventRef>::with_capacity(vec_len);
@@ -517,11 +516,9 @@ fn possible_intersection(e1: &SweepEventRef, e2: &SweepEventRef) {
         let left  = event_holder.get(last).unwrap();
         let right = event_holder.get(last - 1).unwrap();
 
-        // original code:
-
         /*
-            event->other->other = left; // this probably will be invalidate when the event_holder resizes !!!
-            event->other = right;       // in the Rust version, it is replaced by an index
+            event->other->other = left;   // NOTE: this probably will be invalidated
+            event->other = right;         // when the event_holder resizes !!!
             eq.push(left);
             eq.push(right);
         */
@@ -529,8 +526,8 @@ fn possible_intersection(e1: &SweepEventRef, e2: &SweepEventRef) {
         other_mut!(event).other = left;
         inner_mut!(event).other = right;
 
-        // eq.push(left.clone());
-        // eq.push(right.clone());
+        eq.push(left.clone());
+        eq.push(right.clone());
     }
 
     // end of divide_segment()
@@ -551,7 +548,9 @@ fn possible_intersection(e1: &SweepEventRef, e2: &SweepEventRef) {
     match b {
         Some(new) => {
             if inner!(e1).polygon_type == inner!(e2).polygon_type {
-                eprintln!("A polygon has overlapping edges. Sorry, but the program does not work yet with this kind of polygon");
+                eprintln!("A polygon has overlapping edges. \n
+                           Sorry, but the program does not work yet
+                           with this kind of polygon");
                 return;
             }
             new_b = new;
@@ -575,57 +574,57 @@ fn possible_intersection(e1: &SweepEventRef, e2: &SweepEventRef) {
     }
 
     // the line segments overlap
-    let mut sorted_events = Vec::<Option<&SweepEvent>>::with_capacity(4);
-/*
-    if e1.p == e2.p {
+    let mut sorted_events = Vec::<Option<&mut SweepEvent>>::with_capacity(4);
+
+    if inner!(e1).p == inner!(e2).p {
         sorted_events.push(None)
-    } else if e1.compare(e2) {
-        sorted_events.push(Some(e2));
-        sorted_events.push(Some(e1));
+    } else if inner!(e1).compare(inner_mut!(e2)) {
+        sorted_events.push(Some(inner_mut!(e2)));
+        sorted_events.push(Some(inner_mut!(e1)));
     } else {
-        sorted_events.push(Some(e1));
-        sorted_events.push(Some(e2));
+        sorted_events.push(Some(inner_mut!(e1)));
+        sorted_events.push(Some(inner_mut!(e2)));
     }
 
     if e1_other_p == e2_other_p {
 
-    } else if e1.compare(e2) {
-        sorted_events.push(Some(other!(e2)));
-        sorted_events.push(Some(other!(e1)));
+    } else if inner!(e1).compare(inner!(e2)) {
+        sorted_events.push(Some(other_mut!(e2)));
+        sorted_events.push(Some(other_mut!(e1)));
     } else {
-        sorted_events.push(Some(other!(e1)));
-        sorted_events.push(Some(other!(e2)));
+        sorted_events.push(Some(other_mut!(e1)));
+        sorted_events.push(Some(other_mut!(e2)));
     }
-*/
-/*
+
+
     if sorted_events.len() == 2 {
         // are both line segments equal?
-        e1.edge_type = EdgeType::NonContributing;
+        inner_mut!(e1).edge_type = EdgeType::NonContributing;
         other_mut!(e1).edge_type = EdgeType::NonContributing;
         return;
     }
 
     if sorted_events.len() == 3 {
         // the line segments share an endpoint
-        sorted_events[1].edge_type = EdgeType::NonContributing;
-        other_mut!(sorted_events[1]).edge_type = EdgeType::NonContributing;
+        sorted_events[1].unwrap().edge_type = EdgeType::NonContributing;
+        unsafe { (*(*sorted_events[1].unwrap().other).inner.get()) }.edge_type = EdgeType::NonContributing;
 
         if sorted_events[0].is_some() {
             // is the right endpoint the shared point?
-            sorted_events[0].edge_type = if e1.in_out == e2.in_out {
-                EdgeType::SameTransition;
+            sorted_events[0].unwrap().edge_type = if inner!(e1).in_out == inner!(e2).in_out {
+                EdgeType::SameTransition
             } else {
-                EdgeType::DifferentTransition;
+                EdgeType::DifferentTransition
             };
-            divide_segment(sorted_events[0], sorted_events[1].p);
+            divide_segment(sorted_events[0], sorted_events[1].unwrap().p);
         } else {
             // the shared point is the left endpoint
-            sorted_events[2].edge_type = if e1.in_out == e2.in_out {
-                EdgeType::SameTransition;
+            sorted_events[2].unwrap().edge_type = if inner!(e1).in_out == inner!(e2).in_out {
+                EdgeType::SameTransition
             } else {
-                EdgeType::DifferentTransition;
+                EdgeType::DifferentTransition
             };
-            divide_segment(sorted_events[2], sorted_events[1].p);
+            divide_segment(sorted_events[2], sorted_events[1].unwrap().p);
         }
 
         return;
@@ -633,10 +632,10 @@ fn possible_intersection(e1: &SweepEventRef, e2: &SweepEventRef) {
 
     // sorted_events.len() == 4
 
-    if sorted_events[0] != other!(sorted_events[3]) {
+    if (*sorted_events[0].unwrap()) != (*(*sorted_events[3].unwrap().other).inner.get()) {
         // no line segment includes totally the other one
-        sorted_events[1].edge_type = EdgeType::NonContributing;
-        sorted_events[2].edge_type = if e1.in_out == e2.in_out {
+        sorted_events[1].unwrap().edge_type = EdgeType::NonContributing;
+        sorted_events[2].unwrap().edge_type = if inner!(e1).in_out == inner!(e2).in_out {
             EdgeType::SameTransition
         } else {
             EdgeType::DifferentTransition
@@ -647,15 +646,17 @@ fn possible_intersection(e1: &SweepEventRef, e2: &SweepEventRef) {
     }
 
     // one line segment includes the other one
-    sorted_events[1].edge_type = EdgeType::NonContributing;
-    other_mut!(sorted_events[1]).edge_type = EdgeType::NonContributing;
+    sorted_events[1].unwrap().edge_type = EdgeType::NonContributing;
+    unsafe { (*(*sorted_events[1].unwrap().other).inner.get()) }.edge_type = EdgeType::NonContributing;
     divide_segment(sorted_events[0], sorted_events[1].p);
 
-    other_mut!(sorted_events[3]).edge_type = if e1.in_out == e2.in_out {
+
+    unsafe { (*(*sorted_events[3].unwrap().other).inner.get()) }.edge_type =
+    if inner!(e1).in_out == inner!(e2).in_out {
         EdgeType::SameTransition
     } else {
         EdgeType::DifferentTransition
     };
-    divide_segment(other!(sorted_events[3]), sorted_events[2].p);
-*/
+
+    divide_segment(other!(sorted_events[3]), sorted_events[2].unwrap().p);
 }

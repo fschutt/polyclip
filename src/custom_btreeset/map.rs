@@ -1679,7 +1679,7 @@ fn first_leaf_edge<BorrowType, K, V>
     }
 }
 
-fn last_leaf_edge<BorrowType, K, V>
+pub(in custom_btreeset) fn last_leaf_edge<BorrowType, K, V>
     (mut node: NodeRef<BorrowType, K, V, marker::LeafOrInternal>)
      -> Handle<NodeRef<BorrowType, K, V, marker::Leaf>, marker::Edge> {
     loop {
