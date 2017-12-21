@@ -70,9 +70,12 @@ mod utils;
 mod custom_btreeset;
 
 pub use point::{Point2D, line_intersect};
-pub use polygon::{Polygon, WindingOrder, calculate_bounding_box, calculate_winding_order};
+pub use polygon::{Polygon, WindingOrder};
 pub use bbox::Bbox;
-pub use utils::{calculate_signed_area2, calculate_signed_area3};
+pub use utils::{calculate_signed_area2,
+                calculate_signed_area3,
+                calculate_bounding_box,
+                calculate_winding_order};
 
 // TODO: Replace all (*thing.other_vec)[thing.other_idx]
 // with (*thing.other_vec).get_unchecked(thing.other_idx)

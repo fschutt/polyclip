@@ -19,8 +19,8 @@ impl<'a> PartialEq for SweepEventRef<'a> {
         // but Rust does not allow this, because then the method is incompatible
         // with the trait.
 
-        let a = *self.inner.get();
-        let b = *other.inner.get();
+        let a = unsafe { *self.inner.get() };
+        let b = unsafe { *other.inner.get() };
 
         a.p == b.p &&
         a.other as usize == b.other as usize &&

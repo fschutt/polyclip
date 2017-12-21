@@ -1,6 +1,6 @@
 use segment::Segment;
-use fsize;
-use Point2D;
+use {Point2D, Bbox, fsize};
+use polygon::WindingOrder;
 
 /// Calculate the signed area of a triangle (p0, p1, p2)
 #[inline]
@@ -41,4 +41,70 @@ pub(crate) fn is_point_in_triangle(s: &Segment, o: &Point2D, p: &Point2D) -> boo
     let sign_first = calculate_sign(&s.begin_pt, &s.end_pt, p);
     (sign_first == calculate_sign(&s.end_pt, o, p)) &&
     (sign_first == calculate_sign(o, &s.begin_pt, p))
+}
+
+/// Calculates the winding order of a polygon using the gaussian shoelace formula in O(n) time
+///
+/// # Panics
+///
+/// You must validate that there are at least three points in the nodes
+/// (otherwise, there is no winding order, it's just a point or a line)
+pub fn calculate_winding_order(nodes: &[Point2D]) -> WindingOrder {
+
+    // cannot happen, since the parent function should
+    // take care of early returning on invalid polygons
+    assert!(nodes.len() > 2);
+
+    let iter1 = nodes.iter();
+    let mut iter2 = nodes.iter().cycle();
+    iter2.next();
+
+    // shoelace formula
+    let sum: fsize = iter1.zip(iter2).map(|(p0, p1)| (p1.x - p0.x) * (p1.y + p0.y)).sum();
+    match sum > 0.0 {
+        true  => WindingOrder::Clockwise,
+        false => WindingOrder::CounterClockwise,
+    }
+}
+
+/// Calculates the bounding box of all points in the nodes in O(n) time
+pub fn calculate_bounding_box(nodes: &[Point2D]) -> Bbox {
+
+    #[cfg(not(use_double_precision))]
+    let mut min_x = ::std::f32::MAX;
+
+    #[cfg(use_double_precision)]
+    let mut min_x = ::std::f64::MAX;
+
+    let mut min_y = min_x;
+
+    #[cfg(not(use_double_precision))]
+    let mut max_x = -(::std::f32::MAX);
+
+    #[cfg(use_double_precision)]
+    let mut max_x = -(::std::f64::MAX);
+
+    let mut max_y = max_x;
+
+    for node in nodes {
+        if node.x > max_x {
+            max_x = node.x;
+        }
+        if node.x < min_x {
+            min_x = node.x;
+        }
+        if node.y > max_y {
+            max_y = node.y;
+        }
+        if node.y < min_y {
+            min_y = node.y;
+        }
+    }
+
+    Bbox {
+        top: max_y,
+        bottom: min_y,
+        left: min_x,
+        right: max_x,
+    }
 }
