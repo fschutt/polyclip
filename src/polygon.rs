@@ -1,7 +1,7 @@
 use sweep_event::{SweepEvent, SweepEventRef, PolygonType, EdgeType};
 use segment::Segment;
 use std::collections::BinaryHeap;
-use custom_btreeset::set::BTreeSet;
+use std::collections::BTreeSet;
 use std::cell::UnsafeCell;
 use Point2D;
 
@@ -147,8 +147,8 @@ impl Polygon {
         // -------------------------------------------------------------------- sweep events created
 
         let mut connector = Connector::new();
-        let mut sweep_line = BTreeSet::<&SweepEventRef>::new();
         let mut event_holder = Vec::<SweepEventRef>::new();
+        let mut sweep_line = BTreeSet::<&SweepEventRef>::new();
 
         let minimum_x_bbox_pt = self_bbox.right.min(other_bbox.right);
 
