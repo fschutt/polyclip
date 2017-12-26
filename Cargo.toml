@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Felix Schütt <felix.schuett@maps4print.com>"]
 
 [dependencies]
+intrusive-collections = "0.7.0"
 
 [features]
 use_double_precision = []

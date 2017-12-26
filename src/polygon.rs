@@ -1,7 +1,7 @@
+use intrusive_collections::{RBTreeLink, KeyAdapter};
 use sweep_event::{SweepEvent, SweepEventRef, PolygonType, EdgeType};
 use segment::Segment;
 use std::collections::BinaryHeap;
-use std::collections::BTreeSet;
 use std::cell::UnsafeCell;
 use Point2D;
 
@@ -49,6 +49,49 @@ impl Default for Polygon {
             is_closed: true,
             winding: None,
         }
+    }
+}
+
+use std::rc::Rc;
+
+struct SweepLineEventLink<'a> {
+    link: RBTreeLink,
+    value: Rc<SweepEventRef<'a>>,
+}
+
+#[derive(Clone, Default)]
+struct SweepLine<'a>(::intrusive_collections::__core::marker::PhantomData<Box<SweepLineEventLink<'a>>>);
+
+unsafe impl<'a> Send for SweepLine<'a> { }
+unsafe impl<'a> Sync for SweepLine<'a> { }
+
+// manual implementation of intrusive_adapter!() for easier debugging
+#[allow(dead_code)]
+impl<'a> SweepLine<'a> {
+    pub fn new() -> Self {
+        SweepLine(::intrusive_collections::__core::marker::PhantomData::<Box<SweepLineEventLink<'a>>>)
+    }
+}
+
+#[allow(dead_code, unsafe_code)]
+unsafe impl<'a> ::intrusive_collections::Adapter for SweepLine<'a> {
+    type Link = RBTreeLink;
+    type Value = SweepLineEventLink<'a>;
+    type Pointer = Box<SweepLineEventLink<'a>>;
+    #[inline]
+    unsafe fn get_value(&self, link: *const RBTreeLink) -> *const SweepLineEventLink<'a> {
+        container_of!(link, SweepLineEventLink<'a>, link)
+    }
+    #[inline]
+    unsafe fn get_link(&self, value: *const SweepLineEventLink<'a>) -> *const RBTreeLink {
+        &(*value).link
+    }
+}
+
+impl<'a, 'b> KeyAdapter<'b> for SweepLine<'a> {
+    type Key = Rc<SweepEventRef<'a>>;
+    fn get_key(&self, e: &'b SweepLineEventLink<'a>) -> Rc<SweepEventRef<'a>> { 
+        e.value.clone()
     }
 }
 
@@ -148,7 +191,7 @@ impl Polygon {
 
         let mut connector = Connector::new();
         let mut event_holder = Vec::<SweepEventRef>::new();
-        let mut sweep_line = BTreeSet::<&SweepEventRef>::new();
+        let mut sweep_line = SweepLine::new();
 
         let minimum_x_bbox_pt = self_bbox.right.min(other_bbox.right);
 
@@ -176,6 +219,7 @@ impl Polygon {
             // ---------------------------------------------------------------- end of optimization 1
 
             if inner!(event).left {
+/*
                 // the current line segment must be inserted into the sweepline
 
                 // NOTE: This won't work correctly. A BTreeSet cannot be indexed,
@@ -244,8 +288,9 @@ impl Polygon {
                 if prev != sweep_line_len {
                     possible_intersection(&mut event, &mut sweep_line.map.keys_mut()[next], &mut event_holder, &mut event_queue)
                 }
-
+*/
             } else {
+/*
                 // NOTE: In this block, there is no insertion happening!
 
                 // the current line segment must be removed into the sweep_line
@@ -307,6 +352,7 @@ impl Polygon {
                     let ptr_next = sweep_line.map.keys_mut()[next];
                     possible_intersection(ptr_prev, ptr_next, &mut event_holder, &mut event_queue);
                 }
+            */
             }
         }
 
@@ -447,12 +493,14 @@ fn possible_intersection<'a>(e1: &'a SweepEventRef<'a>, e2: &'a SweepEventRef<'a
         let right = event_holder.get(last - 1).unwrap();
 
         /*
-            event->other->other = left;   // NOTE: this probably will be invalidated
-            event->other = right;         // when the event_holder resizes !!!
+            event->other->other = left;   
+            event->other = right;
             eq.push(left);
             eq.push(right);
         */
 
+        // NOTE: this will be invalidated when the event_holder resizes !!!
+        // CHECK THAT THIS DOES NOT HAPPEN!
         unsafe { (*(*event.other).inner.get()).other = left };
         event.other = right;
 
@@ -504,8 +552,9 @@ fn possible_intersection<'a>(e1: &'a SweepEventRef<'a>, e2: &'a SweepEventRef<'a
     }
 
     // the line segments overlap
-    let mut sorted_events = Vec::<Option<&mut SweepEvent>>::with_capacity(4);
+    let mut sorted_events: [Option<&mut SweepEvent>; 4] = [None, None, None, None];
 
+/*
     if inner!(e1).p == inner!(e2).p {
         sorted_events.push(None)
     } else if inner!(e1).compare(inner_mut!(e2)) {
@@ -536,7 +585,7 @@ fn possible_intersection<'a>(e1: &'a SweepEventRef<'a>, e2: &'a SweepEventRef<'a
 
     if sorted_events.len() == 3 {
         // the line segments share an endpoint
-        sorted_events[1].unwrap().edge_type = EdgeType::NonContributing;
+        sorted_events.get(1).unwrap().edge_type = EdgeType::NonContributing;
         unsafe { (*(*sorted_events[1].unwrap().other).inner.get()) }.edge_type = EdgeType::NonContributing;
 
         if sorted_events[0].is_some() {
@@ -560,7 +609,7 @@ fn possible_intersection<'a>(e1: &'a SweepEventRef<'a>, e2: &'a SweepEventRef<'a
         return;
     }
 
-    // sorted_events.len() == 4
+    // sorted_events are all initialized
 
     if (*sorted_events[0].unwrap()) != (*(*sorted_events[3].unwrap().other).inner.get()) {
         // no line segment includes totally the other one
@@ -574,7 +623,6 @@ fn possible_intersection<'a>(e1: &'a SweepEventRef<'a>, e2: &'a SweepEventRef<'a
         divide_segment(sorted_events[1].unwrap(), sorted_events[2].unwrap().p, event_holder, eq);
         return;
     }
-
     // one line segment includes the other one
     sorted_events[1].unwrap().edge_type = EdgeType::NonContributing;
     unsafe { (*(*sorted_events[1].unwrap().other).inner.get()) }.edge_type = EdgeType::NonContributing;
@@ -588,4 +636,5 @@ fn possible_intersection<'a>(e1: &'a SweepEventRef<'a>, e2: &'a SweepEventRef<'a
         };
 
     divide_segment(&mut (*(*sorted_events[3].unwrap().other).inner.get()), sorted_events[2].unwrap().p, event_holder, eq);
+*/
 }

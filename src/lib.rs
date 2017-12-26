@@ -27,16 +27,9 @@
 // A BTreeSet is just a BTreeMap with the value set to `()`, so an implementation
 // is fairly trivial.
 
-#![feature(core)]
-#![feature(generic_param_attrs)]
-#![feature(dropck_eyepatch)]
-#![feature(nonzero)]
-#![feature(unique)]
-#![feature(collections_range)]
-#![feature(allocator_api)]
-#![feature(core_intrinsics)]
-#![feature(fused)]
-extern crate core;
+// Collections crate for Cursor-like behaviour for RBTrees
+#[macro_use]
+extern crate intrusive_collections;
 
 #[cfg(not(use_double_precision))]
 pub type fsize = f32;
@@ -67,7 +60,6 @@ mod point_chain;
 mod polygon;
 mod segment;
 mod utils;
-mod custom_btreeset;
 
 pub use point::{Point2D, line_intersect};
 pub use polygon::{Polygon, WindingOrder};

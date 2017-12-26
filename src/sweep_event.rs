@@ -19,17 +19,19 @@ impl<'a> PartialEq for SweepEventRef<'a> {
         // but Rust does not allow this, because then the method is incompatible
         // with the trait.
 
-        let a = unsafe { *self.inner.get() };
-        let b = unsafe { *other.inner.get() };
+        let a = unsafe { self.inner.get() };
+        let b = unsafe { other.inner.get() };
 
-        a.p == b.p &&
-        a.other as usize == b.other as usize &&
-        a.polygon_type == b.polygon_type &&
-        a.position_in_sweep_line == b.position_in_sweep_line &&
-        a.left == b.left &&
-        a.in_out == b.in_out &&
-        a.is_inside == b.is_inside &&
-        a.edge_type == b.edge_type
+        unsafe {
+            (*a).p == (*b).p &&
+            (*a).other as usize == (*b).other as usize &&
+            (*a).polygon_type == (*b).polygon_type &&
+            (*a).position_in_sweep_line == (*b).position_in_sweep_line &&
+            (*a).left == (*b).left &&
+            (*a).in_out == (*b).in_out &&
+            (*a).is_inside == (*b).is_inside &&
+            (*a).edge_type == (*b).edge_type
+        }
     }
 }
 
