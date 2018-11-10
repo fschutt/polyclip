@@ -1,5 +1,7 @@
 # polyclip
 
+## Archived, use https://github.com/21re/rust-geo-booleanop instead
+
 polyclip is a library for efficiently intersecting two or more polygons and calculating the intersections.
 The algorithm is a port of the C++ version of the Martinez-Rueda-Feito algorithm described here:
 
